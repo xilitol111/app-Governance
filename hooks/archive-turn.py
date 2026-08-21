@@ -26,25 +26,34 @@ resetsAt timestamp, reconstructed from two rate_limit_info snapshots seen
 during this session) to the moment the user reported the account's usage page
 at 62%, this session's own cache-read total was 26,776,894 — no other session
 was active in that window. That implies ~43,200,000 tokens for this session's
-own contribution at 100%. THRESHOLD_TOKENS below is set to roughly a third of
-that, as an early-but-not-naggy one-time nudge. Known limitations, still
-unresolved: (a) single data point — recalibrate as more (reported %, sample)
-pairs come in; (b) this hook has no visibility into window resets (hooks
-don't receive rate_limit_info), so cumulative-since-session-start
-systematically overcounts for any session that spans a reset, same as this
-one did — biases the trigger earlier than the true window-scoped total would,
-which is an acceptable direction to be wrong in; (c) doesn't account for
-usage from other concurrent sessions or other Claude surfaces (claude.ai,
-Desktop) sharing the same account-wide limit. See
+own contribution at 100%. Known limitations, still unresolved: (a) single
+data point — recalibrate as more (reported %, sample) pairs come in; (b) this
+hook has no visibility into window resets (hooks don't receive
+rate_limit_info), so cumulative-since-session-start systematically overcounts
+for any session that spans a reset — biases the trigger earlier than the true
+window-scoped total would, an acceptable direction to be wrong in; (c)
+doesn't account for usage from other concurrent sessions or other Claude
+surfaces (claude.ai, Desktop) sharing the same account-wide limit. See
 NOTES-2026-08-21-handoff.md for the full investigation.
+
+Notification behavior (revised 2026-08-21, later): originally fired once per
+session at THRESHOLD_TOKENS and only *suggested* wrapping up, because moving
+to a new session cost the user manual setup + lost continuity. Since
+continuity is now handled automatically (CLAUDE.md sync, git-log injection,
+docs/session-archive.md) and Claude can create the replacement session itself
+(create_session), the user asked to raise the frequency — the switching cost
+that justified infrequent, soft nudges is mostly gone. So: THRESHOLD_TOKENS
+is now an *interval*, not a one-time trip wire — this fires again every time
+cumulative cache-read grows by another THRESHOLD_TOKENS, not just once — and
+the reason text instructs Claude to actually call create_session and hand
+the user a link, not merely ask if they'd like to.
 """
 import json
 import os
 import sys
-import time
 
 NOTIFY_ENABLED = True
-THRESHOLD_TOKENS = 15_000_000
+THRESHOLD_TOKENS = 5_000_000
 
 
 def read_transcript(transcript_path):
@@ -136,28 +145,41 @@ def log_sample_and_maybe_notify(lines, cwd, session_id):
     with open(sample_path, "a", encoding="utf-8") as f:
         f.write(json.dumps({"ts": ts, "cache_read_cumulative": total}) + "\n")
 
-    if not NOTIFY_ENABLED or total < THRESHOLD_TOKENS:
+    if not NOTIFY_ENABLED:
         return None
 
     marker_path = f"/tmp/.five-hour-notified-{session_id}"
+    last_notified = 0
     if os.path.exists(marker_path):
-        return None  # already nudged once this session
+        try:
+            with open(marker_path) as f:
+                last_notified = int((f.read() or "0").strip())
+        except (ValueError, OSError):
+            last_notified = 0
+
+    if total - last_notified < THRESHOLD_TOKENS:
+        return None  # not yet another full interval past the last nudge
 
     try:
         with open(marker_path, "w") as f:
-            f.write(str(time.time()))
+            f.write(str(total))
     except OSError:
         pass
 
     return (
         f"[System note, not from the user: this session's cumulative cache-read "
-        f"tokens have crossed the provisional five-hour-limit watch threshold "
-        f"({total:,} tokens, threshold {THRESHOLD_TOKENS:,}). This is a soft, "
-        f"one-time heads-up per governance policy in CLAUDE.md — mention briefly "
-        f"to the user that this session has grown large and, if there's a natural "
-        f"stopping point, offer to wrap up with a handoff note and let them start "
-        f"fresh. Do not force it or block on it — just surface the option, then "
-        f"continue normally.]"
+        f"tokens just crossed another five-hour-limit watch interval "
+        f"({total:,} tokens; nudging every {THRESHOLD_TOKENS:,}). Per governance "
+        f"policy in CLAUDE.md: proactively create a fresh session now with the "
+        f"create_session tool — inherit this environment (omit environment_id), "
+        f"same repo source as this session — then briefly tell the user what's "
+        f"still open here and hand them the new session's link so they can move "
+        f"over whenever convenient. Continuity is already covered by "
+        f"docs/session-archive.md, this repo's git history, and CLAUDE.md, so "
+        f"the new session won't start blind — don't just ask whether to create "
+        f"one, actually create it, since that's now a low-cost action. Then "
+        f"continue this session normally if the user keeps talking here instead "
+        f"of moving.]"
     )
 
 

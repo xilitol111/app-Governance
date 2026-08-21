@@ -42,6 +42,18 @@ re-deriving or re-loading things unnecessarily.
   decision, direction change, or open question gets resolved mid-session,
   write it to a durable file (NOTES/DEVLOG-style) right then rather than
   deferring to an end-of-session wrap-up that might not happen.
+- The `Stop` hook tracks cumulative cache-read tokens against the
+  account's five-hour usage limit and injects a system note every time
+  that total crosses another watch interval (not just once per session —
+  switching sessions is now cheap enough that repeated nudges are worth
+  it). When that note appears: actually call `create_session` yourself
+  (inherit the environment, same repo source) rather than just asking the
+  user whether to — continuity is already covered by
+  `docs/session-archive.md`, git history, and this file, so the new
+  session starts oriented. Tell the user briefly what's still open here
+  and hand them the new session's link; keep working here if they keep
+  talking instead of moving. Don't wait for the user to suggest the
+  switch themselves.
 
 ## My own operating discipline
 

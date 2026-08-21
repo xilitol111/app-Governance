@@ -1,3 +1,60 @@
+## Notification frequency raised + Claude now proactively creates the replacement session (same day, latest change)
+
+User's question (after being told Claude itself can call `create_session`):
+「というかセッションの開始をai側でできるなら極論md等でログを保管しつつ毎回話毎にセッションを
+自動で作らせればいいのでは？」(if the AI can start sessions itself, why not just have it create a
+new session every single conversation/topic, relying on the md-based log for continuity?)
+
+Explained why that doesn't fully work as stated: Claude calling `create_session` spins up a
+*new*, separate session — it doesn't relocate the user's actual live conversation into it, so a
+per-topic auto-create policy would leave the user still typing into the old session unless they
+notice and switch manually. Proposed a middle ground instead: keep the existing five-hour-limit
+`Stop`-hook notification, but on trigger have Claude *proactively* call `create_session` itself
+(inheriting the environment + repo) and hand the user a direct link, rather than only suggesting
+they start a new one.
+
+User's reply, accepting the proposal and asking to also raise the frequency:
+「それでいい ただし引き継ぎ含め自動でやってくれて人は移動するだけならハードルは下がったので
+頻度は毎回とまでいかなくとももっと高めてこまめにでよい」(That's fine — but since the AI now
+handles the handoff automatically and the person only has to move over, the switching hurdle is
+lower, so the frequency doesn't need to be every single time, but can be raised / more frequent
+is fine.)
+
+**Change made, in `hooks/archive-turn.py`:**
+- `THRESHOLD_TOKENS`: `15,000,000` → `5,000,000`.
+- Notification semantics: was a one-time trip wire (fired once per session, via a boolean marker
+  file). Now an *interval*: the marker file stores the cumulative value at the last notification,
+  and it fires again every time `total - last_notified >= THRESHOLD_TOKENS`, i.e. every 5,000,000
+  additional cumulative cache-read tokens, repeatedly through a long session.
+- Injected `reason` text: was a soft suggestion to consider wrapping up. Now explicitly instructs
+  Claude to actually call `create_session` (inherit environment, same repo source), tell the user
+  what's still open, and hand them the new session's link — "don't just ask whether to create one,
+  actually create it, since that's now a low-cost action" — then keep working in the current
+  session if the user keeps talking there instead of moving.
+
+**Rationale**: the switching-cost argument that previously justified an infrequent, soft,
+suggestion-only nudge (manual setup + lost continuity) no longer holds, because continuity is
+fully automated (`docs/session-archive.md`, git history, `CLAUDE.md` re-sync via
+`session-start.sh`) and session creation itself is now a tool call Claude can make unprompted —
+the user's only remaining action is clicking a link. Lowering the threshold and switching from
+one-time to recurring reflects that the cost of nudging (and of the user acting on it) dropped,
+not that the five-hour calibration itself changed.
+
+**Verification**: `python3 -m py_compile hooks/archive-turn.py` passed. Directly exercised
+`log_sample_and_maybe_notify()` with simulated growing cumulative totals
+(1M, 4M, 5.5M, 9M, 10.2M, 15.1M, 15.2M) against a scratch cwd/session id — fired exactly at 5.5M
+and 15.1M (the two points that cross a new 5M-multiple boundary past the last notification),
+correctly skipped 9M and 10.2M. Test artifacts cleaned up afterward. `CLAUDE.md`'s "Session
+scoping" section and `README.md`'s hook description were updated to match this behavior in the
+same change.
+
+**Not yet tested against a real live session** organically accumulating 5M+ cache-read tokens and
+observing the actual `create_session` call fire mid-conversation — the two previous Setup-Script
+tests only verified installation, not this notification path. Worth doing opportunistically the
+next time a real session runs long enough, rather than manufacturing a synthetic transcript for it.
+
+---
+
 ## Resolved (same day, after the user pasted the Setup Script): it failed on first real test — made it network-free
 
 User pasted the (git-clone-based) Setup Script into the `kakeibo` environment
