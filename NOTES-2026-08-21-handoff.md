@@ -118,6 +118,83 @@ without materially increasing token consumption. Design settled on:
   resulting file was correctly detected as a new file by
   `git status --porcelain`.
 
+## Resolved (same day, later): five-hour-limit investigation — log collection shipped, threshold notification deliberately NOT enabled yet
+
+User's actual pain point ("今引っかかることが多い") turned out to be the
+`five_hour` rolling window specifically (confirmed by asking directly — other
+sessions in `list_sessions` showed `seven_day` and there's a separate monthly
+spend cap, so there are at least 3 independent limit tiers on this account).
+
+Investigation, in order:
+
+1. **Premise check (user pushed back correctly)**: asked whether the five-hour
+   meter is fundamentally token-based (with per-operation weighting). Verified
+   against Anthropic's own support article: **it is explicitly NOT a token
+   budget** — "usage is metered as a share of a five-hour session... Anthropic
+   reserves the right to adjust that share." Token count, message length,
+   attachments, tool use, model, and effort all influence it, but there's no
+   published conversion formula. This means any token-based threshold is
+   necessarily a proxy, not a direct measurement.
+2. **External research, round 1**: generic blog advice (use cheaper models,
+   keep CLAUDE.md small, disable unused tools). User correctly called this out
+   as "things anyone could guess without research" and pointed out that
+   model/effort/tool-connector choices are made by the *human* at session
+   setup, not by Claude reading CLAUDE.md — so writing that guidance into
+   CLAUDE.md targets the wrong actor and accomplishes nothing.
+3. **External research, round 2, more targeted**: found real quantitative
+   community investigations — a leaked Claude Code source map led to
+   `github.com/ArkNill/claude-code-hidden-problem-analysis` (45,884 requests /
+   320 sessions monitored via `anthropic-ratelimit-unified-*` headers: ~1% of
+   quota ≈ 1.5–2.1M cache-read tokens vs. only 9–16K output tokens, i.e. output
+   is far "heavier" per-token but cache read dominates in raw volume) and
+   `anthropics/claude-code` issue #24147 (one real account, 30 days: cache
+   reads were 99.93% of total metered tokens, 1,310:1 ratio vs. I/O; single-day
+   comparison showed cache reads growing 2.8x while I/O only grew 1.7x — a real
+   measurement of the super-linear growth this session's CLAUDE.md guidance
+   was already written to guard against). **Critical finding from #24147**:
+   cache-read tokens reportedly count at *full* weight against the five-hour/
+   weekly quota, unlike the ~0.1x discount they get on the dollar-billed
+   `cost_usd` — this is the most likely explanation for the 9–13x gap found
+   earlier between computed and reported `cost_usd` (quota consumption and
+   dollar billing are apparently not the same meter).
+4. **Own account calibration attempt**: user reported the app showing
+   `five_hour: 62%, resets in ~1h20m`. Cross-referenced against this session's
+   own `rate_limit_info.resetsAt` values already seen twice this session
+   (09:50 UTC, then 15:40 UTC after an intervening idle-gap reset around
+   09:50–10:40) — confirmed the current window started ~10:40 UTC, consistent
+   with the reported reset countdown. But this session's own start (05:43 UTC)
+   predates that window, so `get_session`'s cumulative
+   `cache_read_tokens: 18,389,231` for the session mixes pre-window and
+   in-window usage and can't be cleanly attributed to the current window's 62%
+   without per-turn timestamps — which is exactly what the new logging (below)
+   now captures going forward.
+5. **Implementation attempt surfaced a real data-quality bug**: extended
+   `hooks/archive-turn.py` to sum `cache_read_input_tokens` across the
+   transcript for a same-session proxy metric. First pass (summing every
+   `type:"assistant"` JSONL line) came out **77.3M**, vs. `get_session`'s
+   18.39M for the same moment — a ~4.2x overcount. Root cause found: each
+   logical API response is logged as *multiple* JSONL lines (this session had
+   275 assistant-type lines but only 128 unique `message.id` values), so the
+   same `cache_read_input_tokens` was being summed multiple times. Deduping by
+   `message.id` brought it down to **38.6M** — still ~2.1x higher than
+   `get_session`'s number, for a reason **not yet identified** (candidate:
+   mid-session auto-compaction resetting the cached prefix, since the last few
+   samples showed cache_read dropping to ~570-580K per call late in this very
+   long session, far below earlier readings — but not confirmed).
+
+**Decision**: ship the log-collection half only. `hooks/archive-turn.py` now
+appends `{ts, cache_read_cumulative}` to `docs/five-hour-samples.jsonl` every
+turn (deduped by message.id, zero LLM cost), and `hooks/session-end.py`
+commits it alongside `docs/session-archive.md`. The threshold-notification
+half is implemented but gated behind `NOTIFY_ENABLED = False` in
+`hooks/archive-turn.py` — deliberately not turned on, because shipping a
+threshold against a number with an unexplained ~2x discrepancy from the
+account's own reporting would manufacture false confidence rather than
+provide a real safety net. Revisit once: (a) the 2.1x gap is understood, and
+(b) enough (reported five_hour %, logged sample) pairs have accumulated to
+calibrate `THRESHOLD_TOKENS` against something known to track the same thing
+the account's usage page shows, rather than one ambiguous data point.
+
 ---
 
 # Handoff notes — parent-repo governance (from the GAME session, 2026-08-21)
