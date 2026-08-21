@@ -40,14 +40,17 @@ Claude Code運用ガイドラインの原本(source of truth)を管理するリ�
   ```bash
   #!/bin/bash
   set -euo pipefail
-  mkdir -p ~/.claude/hooks
 
-  RAW_BASE="https://raw.githubusercontent.com/xilitol111/app-Governance/main"
+  GOV_REPO="https://github.com/xilitol111/app-Governance"
+  GOV_CLONE="$HOME/.claude/governance-src"
+  git clone --quiet --depth 1 --branch main "$GOV_REPO" "$GOV_CLONE"
+
+  mkdir -p ~/.claude/hooks
+  cp "$GOV_CLONE/CLAUDE.md" ~/.claude/CLAUDE.md
   for f in session-start.sh archive-turn.py session-end.py; do
-    curl -fsSL "$RAW_BASE/hooks/$f" -o ~/.claude/hooks/"$f"
+    cp "$GOV_CLONE/hooks/$f" ~/.claude/hooks/"$f"
     chmod +x ~/.claude/hooks/"$f"
   done
-  curl -fsSL "$RAW_BASE/CLAUDE.md" -o ~/.claude/CLAUDE.md
 
   python3 - << 'PY'
   import json, os

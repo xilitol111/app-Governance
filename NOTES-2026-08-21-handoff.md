@@ -1,3 +1,44 @@
+## Resolved (same day, right after merging to main): the whole fetch mechanism was silently broken — curl can't read a private repo
+
+Immediately after fast-forwarding this work to `main` (at the user's "回して"
+go-ahead), sanity-checked that the Setup Script would actually work by
+curling the just-pushed `raw.githubusercontent.com/.../main/CLAUDE.md` URL —
+**404**. Checked whether it was CDN propagation lag; it wasn't: a
+deliberately nonexistent path on the same repo/branch also 404s, which is
+GitHub's signature for "no unauthenticated access" (private repos and
+missing files are indistinguishable on the raw CDN, by design). **This repo
+is private, so every `curl` fetch in `hooks/session-start.sh` and the
+Setup Script — the entire self-refresh mechanism this whole thread built —
+had been non-functional since the very first version, hours ago.** The
+`|| true` / best-effort error handling meant it would have failed silently:
+`~/.claude/CLAUDE.md` and the hook scripts simply wouldn't have existed on a
+real fresh container, no error surfaced to anyone.
+
+Root cause understood via the one thing that *does* demonstrably work all
+session: `git push`/`git fetch` against `github.com`. Checked
+`~/.gitconfig` and found no embedded token or credential helper — auth is
+injected transparently by the environment's outbound proxy for git's
+smart-HTTP protocol specifically (`__agentproxy/status` showed
+`"gitConfigInjection": true`). That injection doesn't apply to arbitrary
+`curl` requests to a different host (`raw.githubusercontent.com`), which is
+why git operations succeeded all along while raw-content curls silently
+couldn't have.
+
+**Fix**: replaced every `curl`-to-raw-CDN fetch with `git clone` (first run)
+/ `git fetch` + `reset --hard` (subsequent runs) against a local mirror at
+`~/.claude/governance-src/`, in both `hooks/session-start.sh` and the
+Setup Script documented in `README.md`. Verified end-to-end against a
+simulated fresh container (`HOME` pointed at an empty temp directory): the
+script correctly cloned the private repo and populated
+`~/.claude/CLAUDE.md` and all three hook scripts from nothing.
+
+**Lesson for next time**: verify a fetch mechanism against the actual
+deployed artifact (a real private repo, unauthenticated) before calling it
+done — testing only against already-authenticated local git operations
+(which is all that was done originally) hid this for the entire session.
+
+---
+
 ## Resolved (same day, later still): session-switching policy derivation, and a correction
 
 User asked how to derive an actual session-switching *policy* from the
