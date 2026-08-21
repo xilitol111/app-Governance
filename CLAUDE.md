@@ -35,6 +35,13 @@ re-deriving or re-loading things unnecessarily.
 - A natural place to suggest splitting: once a plan is finalized and
   captured in a durable file, or a feature/phase ships — flag it to the
   user as a good session boundary rather than continuing by default.
+- Commit meaningful progress at natural checkpoints, not only when a
+  session feels "done." Sessions can end unexpectedly (container
+  reclaimed, connection drop); uncommitted work does not survive to the
+  next session, no matter what automation exists around it. When a
+  decision, direction change, or open question gets resolved mid-session,
+  write it to a durable file (NOTES/DEVLOG-style) right then rather than
+  deferring to an end-of-session wrap-up that might not happen.
 
 ## My own operating discipline
 

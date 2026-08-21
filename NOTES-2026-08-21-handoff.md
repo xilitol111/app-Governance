@@ -38,6 +38,86 @@ Decisions made, superseding the "planned structure" and TODOs below:
   designed); the `my-monorepo-apps` duplicate-purpose question below
   is still unresolved.
 
+## Resolved in a later same-day follow-up: physical integration reconsidered, then dropped again
+
+User asked to research general industry practice (polyrepo vs monorepo, and
+whether something bigger than "a repository" exists for cross-repo
+governance) before finalizing. Findings:
+
+- GitHub **Organization** is the real supra-repo management unit
+  (billing, teams, org-wide security policy, reusable workflows). Its
+  `<org>/.github` special repo provides org-wide *default* issue/PR
+  templates, `CODE_OF_CONDUCT`, `SECURITY.md`, etc. — but **not**
+  `CLAUDE.md`: Claude Code's CLAUDE.md load locations are only managed
+  policy / user / project / local, and the `.github` defaults mechanism
+  isn't one of them.
+- GitHub **Projects (v2)** at the org level can aggregate issues/PRs
+  across multiple repos into one board — a real answer to "issues feel
+  scattered across repos," but again orthogonal to CLAUDE.md
+  distribution.
+- Meta-repo/manifest-repo pattern (Android's `repo` tool, ROS's
+  `vcstool`/`west`) — a lightweight repo holding pointers to other repos
+  without merging code — is close to what this repo already is.
+- **User's conclusion, which settled the question**: "even with an
+  Organization, if we still need the hook, why bother with the
+  Organization?" — correct. Organization doesn't reduce reliance on the
+  CLAUDE.md-sync hook at all, so it was dropped as unnecessary
+  complexity. This also reconfirmed the earlier point that the *only*
+  way to avoid needing any hook at all is physical integration.
+- Despite that, **user explicitly chose to keep existing apps
+  (GAME/kakeibo/kakeibo-liff) as separate repos and rely on the hook**
+  ("フックで済ませるのがマシな気がしてきた") rather than physically
+  migrating them. Physical integration is considered closed — do not
+  re-litigate without a new reason from the user.
+
+## Resolved: session continuity across sessions, at near-zero token cost
+
+Follow-up requirement: switching sessions should not lose progress/decisions,
+without materially increasing token consumption. Design settled on:
+
+- Claude Code's built-in **auto memory** (`~/.claude/projects/<project>/memory/`)
+  was ruled out — it lives under `~/.claude`, which this session empirically
+  confirmed does **not** survive across sessions in the `kakeibo` environment
+  (same root cause as the CLAUDE.md correction above).
+- A `Stop`-hook-writes-a-log-file design was considered, but rejected in that
+  form: a file written locally and never committed doesn't survive to a new
+  session (fresh clone) either. Auto-committing on every turn was also
+  rejected (git history noise, credential/push concerns).
+- **Final design** — three hooks, installed once via the same Setup Script,
+  each self-refreshing from this repo's `main` every session so future logic
+  changes don't require touching the environment settings again:
+  - `hooks/session-start.sh` (`SessionStart`, once per session): re-fetches
+    itself + its siblings + `CLAUDE.md` from `main`, then prints
+    `git log --oneline -10` + the latest commit's full message +
+    `git status --short` to stdout (auto-injected into context at session
+    start). Zero LLM cost; small bounded token cost once per session.
+  - `hooks/archive-turn.py` (`Stop`, every turn): parses the transcript file
+    (no model call) and appends the latest assistant text to
+    `docs/session-archive.md` in the current project, locally only. Zero
+    token cost — nothing here is injected into context.
+  - `hooks/session-end.py` (`SessionEnd`, once per session, fires
+    automatically — no explicit close needed): commits + pushes
+    `docs/session-archive.md` if it changed, bundling the whole session
+    into one commit rather than one per turn. Zero token cost (pure git
+    ops).
+- User explicitly approved the auto-commit/push behavior, scoped strictly to
+  `docs/session-archive.md` for archival purposes only — not a general
+  "Claude may auto-push anything" grant.
+- `docs/session-archive.md` is a passive archive: it is **not** auto-injected
+  into new sessions' context (that would make the cost grow unbounded over
+  time). It exists to be read on demand, only when a future session actually
+  needs to dig past what the `git log` summary already shows.
+- Known residual gap (discussed openly, accepted as a trade-off): work that
+  is neither committed nor archived before a session ends unexpectedly is
+  still lost. Zero-cost automation cannot fully close this; the mitigation
+  is the CLAUDE.md guidance to commit/write decisions at checkpoints rather
+  than only at a session's end.
+- Implemented and locally verified this session: `hooks/archive-turn.py` run
+  against this session's own real transcript correctly appended the latest
+  assistant turn to `docs/session-archive.md` with a dedup marker; the
+  resulting file was correctly detected as a new file by
+  `git status --porcelain`.
+
 ---
 
 # Handoff notes — parent-repo governance (from the GAME session, 2026-08-21)
