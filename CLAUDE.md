@@ -35,6 +35,17 @@ re-deriving or re-loading things unnecessarily.
 - A natural place to suggest splitting: once a plan is finalized and
   captured in a durable file, or a feature/phase ships — flag it to the
   user as a good session boundary rather than continuing by default.
+- Within a single session, distinguish `/clear` from `/compact`: when the
+  user pivots to a task clearly unrelated to what the conversation has been
+  doing, proactively suggest `/clear` rather than letting unrelated history
+  keep accumulating in the cached context — durable plan/spec files (not
+  conversation memory) already carry any continuity that matters, so
+  `/clear` loses nothing worth keeping. Reserve `/compact` for continuing
+  the *same* line of work once the transcript has simply grown long. This is
+  a different lever from the five-hour-limit `create_session` policy below:
+  `/clear` addresses topic-locality within one session (free, instant,
+  user-run), `create_session` addresses the account-wide usage-window limit
+  — apply whichever is actually relevant, and both where both apply.
 - Commit meaningful progress at natural checkpoints, not only when a
   session feels "done." Sessions can end unexpectedly (container
   reclaimed, connection drop); uncommitted work does not survive to the

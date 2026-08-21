@@ -1,3 +1,16 @@
+## Zenn記事を踏まえた節約策2件: 5時間枠アンカーRoutine + /clear運用ルール (same day, latest change)
+
+ユーザーが [Zennの記事](https://zenn.dev/trknhr/articles/ae45f1380f90b3) を提示し、「特に自動化できるもの」を検討するよう依頼。記事の内容(`/clear`/`/compact`の使い分け、早朝起動によるfive_hourリセット回数の増加、モデル混在によるキャッシュ無効化、指示言語の使い分け、モデル選択方針)を既存のガバナンス方針と突き合わせ、以下の判断をした:
+
+- **既存でカバー済み**: plan/specのファイル化、5時間制限の監視・セッション切り替え通知。
+- **自動化した**: 早朝起動によるfive_hourリセット回数の増加策。`create_trigger`で外部Routine(`trig_01SKn2a7Y6on7ZDnoKzTTk6H`、毎日UTC 0:00=JST 9:00、`kakeibo`環境に新規セッションを起動、ツール呼び出し無しの最小限の1往復のみ)を作成。詳細は`README.md`の「外部Routine」節。**このRoutineは本リポジトリのコードではなくアカウント側の設定なので、`main`のgit historyだけを見ても存在に気づけない** — 次のセッションがこの節約策の存在を認識できるよう、README.mdに明記した。
+- **明文化のみ**: `/clear`(無関係な新規タスクへの切り替え時に履歴を切り離す)と`/compact`(同じ作業の続きで履歴を要約する)の使い分けをCLAUDE.mdの「Session scoping」に追記。既存の`create_session`ベースの5時間制限ポリシーとは別レバーである旨も明記(前者はセッション内・無料・即時、後者はアカウント全体の利用枠)。
+- **見送り(効果不明・費用対効果が薄いと判断)**: モデル混在時のキャッシュ無効化検知(`archive-turn.py`にモデルID変化を足せば技術的には可能だが、防止ではなく検知どまりで、混在自体がそもそも稀)、アイドル時間の警告(同様に稀なケース)、指示言語・モデル選択の使い分け(運用習慣の話でありコードで強制できない)。
+
+**未検証**: 5時間枠アンカーRoutineの実際の効果(リセット回数が本当に増えるか)は未計測。次に有意なデータが取れたタイミングでここに追記する。
+
+---
+
 ## SessionStart now auto-surfaces a tail of docs/session-archive.md (same day, latest change)
 
 Follow-up to the previous entry: after implementing the proactive `create_session` +

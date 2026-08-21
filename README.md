@@ -144,6 +144,15 @@ Claude Code運用ガイドラインの原本(source of truth)を管理するリ�
 コミット・pushする**。これは「セッションの会話ログを保管する」という目的専用に限定した動作で、
 それ以外のファイルには一切触れない。この自動化は本リポジトリで明示的に合意した上で組み込んでいる。
 
+## 外部Routine: 五時間枠アンカー(毎朝9時JST起動)
+
+[Zennの記事](https://zenn.dev/trknhr/articles/ae45f1380f90b3)で紹介されていた「早朝に軽い作業を1つ起動しておくと、five_hour利用枠のリセット境界が早まり、日中に使える枠のリセット回数が増える(例: 2回→3回)」という節約策を自動化したもの。
+
+- 実体は本リポジトリのコードではなく、アカウント側のRoutine(`create_trigger`で作成、trigger_id: `trig_01SKn2a7Y6on7ZDnoKzTTk6H`)。`kakeibo`環境(`env_01CH8G8RmBJwUGCWuLdsJFGj`)で毎日UTC 0:00(=JST 9:00)に新規セッションを1つ起動する。
+- 起動されたセッションへの指示は「ツール呼び出しは一切せず、短い確認だけ返して終了する」ことに限定してあり、five_hour起点を早めるための最初のAPI呼び出しを発生させる以外の目的はない(コストを最小化するため)。
+- 通知(push/email)は静音設定。管理・削除は `list_triggers` / `delete_trigger` / `update_trigger` から行う。
+- 効果測定は未実施。実測データが取れたら`NOTES-2026-08-21-handoff.md`に追記する想定。
+
 ## 別マシン/別環境で使う場合
 
 この仕組みは`kakeibo`環境専用。ローカルPCや別のClaude Code環境でも同じ内容を効かせたい場合は、
