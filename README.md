@@ -39,20 +39,59 @@ Claude Code運用ガイドラインの原本(source of truth)を管理するリ�
 
   ```bash
   #!/bin/bash
-  set -euo pipefail
+  set -u
+  mkdir -p ~/.claude/hooks
 
+  # This script does no network I/O on purpose — it only writes local files.
+  # An earlier version ran `git clone` directly here and failed
+  # ("Setup script failed", non-recoverable): this early in container
+  # provisioning, the environment's git-auth proxy injection isn't
+  # guaranteed to be ready yet, and this script runs under `set -e`-like
+  # all-or-nothing semantics with no visible logs to debug from. Instead,
+  # this just writes a minimal session-start.sh that does the real fetch —
+  # that script runs later, once a real session's git auth is live (verified
+  # working every session so far), and is itself tolerant of a failed fetch.
+  cat > ~/.claude/hooks/session-start.sh << 'HOOK'
+  #!/bin/bash
+  set -uo pipefail
   GOV_REPO="https://github.com/xilitol111/app-Governance"
   GOV_CLONE="$HOME/.claude/governance-src"
-  git clone --quiet --depth 1 --branch main "$GOV_REPO" "$GOV_CLONE"
+  if [ -d "$GOV_CLONE/.git" ]; then
+    git -C "$GOV_CLONE" fetch --quiet origin main 2>/dev/null \
+      && git -C "$GOV_CLONE" reset --quiet --hard origin/main 2>/dev/null
+  else
+    rm -rf "$GOV_CLONE"
+    git clone --quiet --depth 1 --branch main "$GOV_REPO" "$GOV_CLONE" 2>/dev/null
+  fi
+  if [ -d "$GOV_CLONE" ] && [ -f "$GOV_CLONE/CLAUDE.md" ]; then
+    mkdir -p ~/.claude/hooks
+    cp "$GOV_CLONE/CLAUDE.md" ~/.claude/CLAUDE.md
+    for f in session-start.sh archive-turn.py session-end.py; do
+      if [ -f "$GOV_CLONE/hooks/$f" ]; then
+        cp "$GOV_CLONE/hooks/$f" ~/.claude/hooks/"$f"
+        chmod +x ~/.claude/hooks/"$f"
+      fi
+    done
+  fi
+  if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    echo "## Recent commits"
+    git log --oneline -10 2>/dev/null
+    echo
+    echo "## Latest commit (full message)"
+    git log -1 2>/dev/null
+    echo
+    echo "## Uncommitted changes"
+    git status --short 2>/dev/null
+  fi
+  HOOK
+  chmod +x ~/.claude/hooks/session-start.sh
 
-  mkdir -p ~/.claude/hooks
-  cp "$GOV_CLONE/CLAUDE.md" ~/.claude/CLAUDE.md
-  for f in session-start.sh archive-turn.py session-end.py; do
-    cp "$GOV_CLONE/hooks/$f" ~/.claude/hooks/"$f"
-    chmod +x ~/.claude/hooks/"$f"
-  done
+  # Empty placeholders so the hooks registered below never error on a
+  # missing file, even before the first real SessionStart has populated them.
+  touch ~/.claude/hooks/archive-turn.py ~/.claude/hooks/session-end.py
+  chmod +x ~/.claude/hooks/archive-turn.py ~/.claude/hooks/session-end.py
 
-  python3 - << 'PY'
+  python3 - << 'PY' || true
   import json, os
   path = os.path.expanduser("~/.claude/settings.json")
   try:
@@ -76,9 +115,11 @@ Claude Code運用ガイドラインの原本(source of truth)を管理するリ�
   with open(path, "w") as f:
       json.dump(settings, f, indent=2)
   PY
+
+  exit 0
   ```
 
-  (既存の`~/.claude/settings.json`があってもマージするだけで上書きしない。)
+  (既存の`~/.claude/settings.json`があってもマージするだけで上書きしない。このスクリプト自体はネットワーク通信をしないため、環境provisioning初期のタイミング問題で失敗することがない。)
 
 ## 更新方法
 

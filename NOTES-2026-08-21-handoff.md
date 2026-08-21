@@ -1,3 +1,38 @@
+## Resolved (same day, after the user pasted the Setup Script): it failed on first real test — made it network-free
+
+User pasted the (git-clone-based) Setup Script into the `kakeibo` environment
+settings and asked to test it. Spun up a real test session
+(`session_014ecYpAAGVqBTGJfDAetRNH`, in the `kakeibo` environment, archived
+after this investigation) via `create_session` to check. Result:
+`last_init_error: {error_kind: "init_script", message: "Setup script
+failed", recoverable: "false"}` — the session never became usable
+(`ListAgents` couldn't reach it). No raw setup-script log was available
+through any tool here to see the actual stderr.
+
+Most likely cause (reasoned, not confirmed — no logs to verify against):
+the Setup Script used `set -euo pipefail` and called `git clone` directly.
+This early in container provisioning, the environment's git-auth proxy
+injection (the mechanism confirmed working for every `git push`/`fetch` all
+session, documented two sections up) may not be live yet, and any single
+failing command under `-e` kills the whole script with no partial credit —
+so even the harmless local file writes (hook scripts, `settings.json`)
+never happened either.
+
+**Fix**: rewrote the Setup Script to do *no network I/O at all*. It now only
+writes a minimal `session-start.sh` (embedded inline, not fetched) plus
+empty placeholder files for the other two hooks, and registers all three in
+`settings.json` — all local filesystem operations, nothing that depends on
+git auth being ready. The real `git clone`/`fetch` moved entirely into
+`session-start.sh` itself, which only runs later once an actual session's
+own git auth is live (proven reliable all session) and was already written
+to tolerate a failed fetch without crashing (no `-e`). Verified locally
+against a simulated fresh `HOME` — exits 0, produces the correct
+`settings.json` and hook files, using no network access. Not yet re-verified
+against a real new `kakeibo` session (need the user to re-paste the updated
+script and re-test) — that's the next step, not confirmed done.
+
+---
+
 ## Resolved (same day, right after merging to main): the whole fetch mechanism was silently broken — curl can't read a private repo
 
 Immediately after fast-forwarding this work to `main` (at the user's "回して"
