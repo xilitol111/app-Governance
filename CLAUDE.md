@@ -47,11 +47,15 @@ re-deriving or re-loading things unnecessarily.
   user-run), `create_session` addresses the account-wide usage-window limit
   — apply whichever is actually relevant, and both where both apply.
 - No tool lets Claude run `/clear` on the user's behalf or pre-fill their
-  input — it can only be suggested. When suggesting it, put the bare
-  command alone on its own line as inline code (`` `/clear` ``), not
-  embedded mid-sentence: most clients render inline/fenced code with a
-  one-tap copy affordance, so the user can act on it without hunting for
-  the exact text or retyping it.
+  input — it can only be suggested, and the user prefers this framed as an
+  explicit choice rather than buried in prose. When a natural boundary is
+  reached, use `AskUserQuestion` to ask directly (e.g. "clear now" vs.
+  "keep going") instead of just mentioning `/clear` in passing — a
+  clickable decision point is easier to act on than free text. If the
+  user picks "clear now," follow up with the bare command alone on its
+  own line as inline code (`` `/clear` ``), since Claude still can't run
+  it for them — most clients render inline/fenced code with a one-tap
+  copy affordance, so they can act on it without retyping.
 - Commit meaningful progress at natural checkpoints, not only when a
   session feels "done." Sessions can end unexpectedly (container
   reclaimed, connection drop); uncommitted work does not survive to the
