@@ -1,3 +1,56 @@
+## Resolved (same day, later still): session-switching policy derivation, and a correction
+
+User asked how to derive an actual session-switching *policy* from the
+calibrated ceiling (~43.2M tokens ≈ 100% of five_hour, from the prior
+section), and separately whether an optimal CLAUDE.md size range could be
+derived by weighing the diminishing token-savings from shrinking it against
+the point where it gets too small to function.
+
+**Growth model, fit to this session's own real data** (99 messages in the
+current five_hour window, `cache_read_input_tokens` per unique `message.id`):
+
+```
+cumulative(N) = B·N + (c/2)·N²
+B ≈ 273,747 tokens   (fitted intercept — roughly the fixed per-turn floor:
+                       system prompt + CLAUDE.md + early accumulated reads)
+c ≈ 3,788 tokens/turn (fitted slope — conversation growth per turn)
+```
+
+Solving `cumulative(N) = W` for the calibrated ceiling (W = 43,200,000) gives
+**N ≈ 95 turns** as the safe turn count for a conversation shaped like this
+one (research + writing, moderate tool use). The existing notification
+threshold (15M) corresponds to **N ≈ 42 turns**, i.e. roughly 50 turns of
+margin before the true ceiling under this model.
+
+**Code-centric estimate (rough, not confidently fit)**: split this same
+session's per-turn deltas by whether the turn followed heavy tool output
+(>2000 chars of `tool_result` content). Tool-heavy turns (n=14) had ~3x the
+*median* delta of light/conversational turns (n=88) — 3,740 vs 1,213. Means
+were not usable (light-turn mean was negative, an artifact of parallel
+tool-call batching / thinking-token variance, not real content shrinkage).
+Applying that ~3x as an illustrative multiplier: `c_code ≈ 11,364/turn` →
+**N ≈ 66 turns**. This is a single-session, single-account extrapolation —
+treat as a placeholder until a real code-heavy session (e.g. in GAME) runs
+with this same logging and produces its own fit.
+
+**Correction to a claim made earlier the same day**: previously stated that
+shrinking CLAUDE.md (reducing B) has *diminishing* returns as it gets
+smaller. Recomputed `dN/dB` properly and found the opposite: marginal safe-
+turns gained per token cut **increases** as B shrinks (0.113 turns/1000 tok
+at B=400K, rising to 0.262 turns/1000 tok at B=5K — approaching the
+asymptote 1/c as B→0), and is smallest when B is already large. Consequence:
+**the token/five-hour-limit model alone provides no natural floor on
+CLAUDE.md size** — it says smaller is always at least as good, with no point
+where the model itself says "stop cutting here." Any floor has to come from
+content necessity (what CLAUDE.md must keep to avoid Claude making avoidable
+mistakes), which isn't something this token model can quantify. The
+practical way to find that floor is empirical, not computed: run the
+existing "if Claude repeats a mistake twice, add it to CLAUDE.md" process in
+reverse after trimming — watch for regressions (repeated mistakes, redundant
+questions, convention violations) as the signal that a cut went too far.
+
+---
+
 ## Resolved in the follow-up governance session (2026-08-21, later same day)
 
 Decisions made, superseding the "planned structure" and TODOs below:
