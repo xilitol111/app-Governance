@@ -14,27 +14,37 @@ to keep git history from getting noisy):
    reason Claude actually sees — nudge toward wrapping up once cumulative cache
    read crosses a provisional threshold.
 
-Threshold notification is currently DISABLED (see NOTIFY_ENABLED below). While
-building this, summing cache_read_input_tokens across the transcript's assistant
-entries (deduped by message.id, since each message is logged as multiple JSONL
-lines) still came out ~2.1x higher than the account API's own reported total for
-the same session (38.6M locally vs. 18.4M from get_session), for a reason not
-yet identified (possibly mid-session auto-compaction resetting the cached
-prefix, possibly further duplication not yet found). Shipping a threshold
-trigger on a number with an unexplained ~2x discrepancy would manufacture false
-confidence, so this hook logs samples only for now — see
-docs/five-hour-samples.jsonl and NOTES-2026-08-21-handoff.md for the full
-investigation. Re-enable NOTIFY_ENABLED once the discrepancy is understood
-and THRESHOLD_TOKENS is set against a number known to be measuring the same
-thing the account's own usage page shows.
+Threshold calibration (2026-08-21): summing cache_read_input_tokens across the
+transcript's assistant entries (deduped by message.id, since each message is
+logged as multiple JSONL lines) initially came out ~2.1x higher than
+get_session's reported total for the same session. Traced the cause: the
+get_session usage field lags — it matched this session's own *live* running
+total from ~3 hours earlier, not the current moment, so it's a stale
+comparison baseline, not a bug in this count. Redid the correlation using the
+live local total instead: from the current five_hour window's start (a
+resetsAt timestamp, reconstructed from two rate_limit_info snapshots seen
+during this session) to the moment the user reported the account's usage page
+at 62%, this session's own cache-read total was 26,776,894 — no other session
+was active in that window. That implies ~43,200,000 tokens for this session's
+own contribution at 100%. THRESHOLD_TOKENS below is set to roughly a third of
+that, as an early-but-not-naggy one-time nudge. Known limitations, still
+unresolved: (a) single data point — recalibrate as more (reported %, sample)
+pairs come in; (b) this hook has no visibility into window resets (hooks
+don't receive rate_limit_info), so cumulative-since-session-start
+systematically overcounts for any session that spans a reset, same as this
+one did — biases the trigger earlier than the true window-scoped total would,
+which is an acceptable direction to be wrong in; (c) doesn't account for
+usage from other concurrent sessions or other Claude surfaces (claude.ai,
+Desktop) sharing the same account-wide limit. See
+NOTES-2026-08-21-handoff.md for the full investigation.
 """
 import json
 import os
 import sys
 import time
 
-NOTIFY_ENABLED = False
-THRESHOLD_TOKENS = 8_000_000
+NOTIFY_ENABLED = True
+THRESHOLD_TOKENS = 15_000_000
 
 
 def read_transcript(transcript_path):

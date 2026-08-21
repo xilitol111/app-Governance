@@ -182,18 +182,56 @@ Investigation, in order:
    samples showed cache_read dropping to ~570-580K per call late in this very
    long session, far below earlier readings — but not confirmed).
 
-**Decision**: ship the log-collection half only. `hooks/archive-turn.py` now
-appends `{ts, cache_read_cumulative}` to `docs/five-hour-samples.jsonl` every
-turn (deduped by message.id, zero LLM cost), and `hooks/session-end.py`
-commits it alongside `docs/session-archive.md`. The threshold-notification
-half is implemented but gated behind `NOTIFY_ENABLED = False` in
-`hooks/archive-turn.py` — deliberately not turned on, because shipping a
-threshold against a number with an unexplained ~2x discrepancy from the
-account's own reporting would manufacture false confidence rather than
-provide a real safety net. Revisit once: (a) the 2.1x gap is understood, and
-(b) enough (reported five_hour %, logged sample) pairs have accumulated to
-calibrate `THRESHOLD_TOKENS` against something known to track the same thing
-the account's usage page shows, rather than one ambiguous data point.
+**Initial decision**: ship the log-collection half only, `NOTIFY_ENABLED =
+False`, pending an explanation for the ~2.1x gap.
+
+## Resolved (same day, immediately after): the 2.1x gap explained — get_session lags; threshold re-enabled
+
+User followed up with another live reading of the app: `five_hour`, resets in
+1h28m — checked against the already-known `resetsAt` (15:40 UTC) and found it
+consistent with the same window (10:40–15:40 UTC), not a new one.
+
+Investigated the 2.1x gap directly instead of leaving it as an open question:
+
+- Inspected several full `usage` objects (including the `iterations` array)
+  across the transcript — no double-counting found; `cache_read_input_tokens`
+  grows monotonically and sanely turn to turn (0 → 229K → 359K → 512K →
+  597K), consistent with a normal cumulative-context growth curve, not a bug.
+- Tried splitting the sum at the window boundary (10:40 UTC) in case
+  `get_session` only counted the current window — didn't reconcile (still
+  ~2.1x off).
+- Found the actual explanation: computed a running cumulative sum ordered by
+  timestamp and found the exact point where it crosses `get_session`'s
+  reported value (18,389,231) — **10:58:49 UTC**, roughly three hours before
+  the ~14:11 UTC moment `get_session` was actually called. **`get_session`'s
+  `usage.cache_read_tokens` field lags significantly behind the live
+  conversation** — it's a periodically-updated aggregate, not a real-time
+  counter. So the "2.1x discrepancy" was never a bug in the local count; it
+  was comparing a live number against a stale one.
+- Redid the 62%-correlation using the corrected, live local total instead of
+  the stale `get_session` figure: window-scoped (10:40 UTC → ~14:14 UTC, when
+  62% was reported) cumulative cache-read for this session alone =
+  **26,776,894**. No other session was active in that window. This implies
+  **~43,200,000 tokens ≈ 100%** of this session's own contribution to the
+  five-hour limit.
+
+**Updated decision**: `NOTIFY_ENABLED = True`, `THRESHOLD_TOKENS =
+15,000,000` (roughly a third of the implied 100% figure — an early,
+one-time, non-blocking nudge, not a hard stop). Verified locally: crossing
+the threshold correctly emits one `decision:"block"` reason Claude sees, and
+a second Stop within the same session correctly suppresses re-notifying
+(marker file at `/tmp/.five-hour-notified-<session_id>`).
+
+**Still open, honestly**: this is one calibration data point. The hook also
+has no way to know when a window resets (hooks don't receive
+`rate_limit_info`), so for a session that spans a reset — like this one did
+— cumulative-since-session-start overcounts relative to the true
+current-window figure, biasing the trigger earlier (an acceptable direction
+to err in, but still imprecise). It also can't see usage from concurrent
+sessions or other Claude surfaces (claude.ai, Desktop) sharing the same
+account-wide limit. Recalibrate `THRESHOLD_TOKENS` as more (reported
+five_hour %, `docs/five-hour-samples.jsonl` reading) pairs accumulate across
+future sessions.
 
 ---
 
