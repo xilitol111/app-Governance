@@ -1,3 +1,45 @@
+## Resolved in the follow-up governance session (2026-08-21, later same day)
+
+Decisions made, superseding the "planned structure" and TODOs below:
+
+- **Physical migration dropped.** GAME (and kakeibo/kakeibo-liff) stay in
+  their own repos, unchanged. This repo holds only the guidelines text —
+  no `projects/<name>/` subtree, no `git subtree` import. See
+  `README.md` for why (researched alternatives — plugin marketplace,
+  `.claude/rules/` symlinks — and both had real gaps for this use case:
+  plugins can't reliably deliver always-loaded free-text guidance the
+  way CLAUDE.md does, and rules-symlinks don't survive this ephemeral
+  cloud environment where each session gets a fresh container).
+- **Important correction to this file's own claim below**: the
+  "`~/.claude/CLAUDE.md` already written in the current remote
+  environment" statement turned out to be wrong by the time the next
+  session opened — the file didn't exist. Same environment
+  (`env_01CH8G8RmBJwUGCWuLdsJFGj`, "kakeibo"), but each session gets an
+  ephemeral container, so a manually-edited home directory doesn't
+  survive to the next session. This is *why* the environment-level
+  approach needed a real fix rather than just "it's already done."
+- **Chosen mechanism**: this repo's `CLAUDE.md` is the source of truth.
+  The `kakeibo` environment's **Setup Script** (configured once via the
+  claude.ai environment settings UI — not something Claude Code can set
+  from inside a session) copies it to `~/.claude/CLAUDE.md` on
+  container provisioning. Because the environment caches state after
+  the setup script runs, this survives to every future session in that
+  environment, for any project, without per-project setup — satisfying
+  "CLAUDE.md-level" and "auto-applies to new projects" both. Trade-off:
+  the setup script runs once and caches, so updates to this repo's
+  `CLAUDE.md` require re-saving the environment's setup script to force
+  a re-fetch. See `README.md` for the exact script and update steps.
+- **Still open / not decided**: whether kakeibo/kakeibo-liff should also
+  live under this governance umbrella (same answer as GAME — no code
+  migration needed, they'd just benefit automatically once opened in
+  the `kakeibo` environment); whether to also cover a local-machine
+  Claude Code setup (the Setup Script mechanism is cloud-environment
+  specific, so a local install needs its own sync step, not yet
+  designed); the `my-monorepo-apps` duplicate-purpose question below
+  is still unresolved.
+
+---
+
 # Handoff notes — parent-repo governance (from the GAME session, 2026-08-21)
 
 This repo's purpose and initial structure were discussed in a separate
