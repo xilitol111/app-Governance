@@ -27,9 +27,21 @@ git auth being ready. The real `git clone`/`fetch` moved entirely into
 own git auth is live (proven reliable all session) and was already written
 to tolerate a failed fetch without crashing (no `-e`). Verified locally
 against a simulated fresh `HOME` — exits 0, produces the correct
-`settings.json` and hook files, using no network access. Not yet re-verified
-against a real new `kakeibo` session (need the user to re-paste the updated
-script and re-test) — that's the next step, not confirmed done.
+`settings.json` and hook files, using no network access.
+
+**Re-verified and confirmed working against a real session**: user
+re-pasted the network-free Setup Script into the `kakeibo` environment
+settings. Spun up a second real test session
+(`session_01LbGVd2QcCrhKKYDNnmgMrd`, archived after confirming) via
+`create_session` with the same 5-point verification prompt as the first
+failed attempt. This time: no `last_init_error`, container booted normally
+(`container_cc_version: 2.1.238`), session ran and completed with
+`post_turn_summary: "Setup Script 5点確認: CLAUDE.md/hooks/settings.json/
+governance-src/ すべて正常"` (all 5 checks passed) and real tool-use token
+usage, not an immediate error. **The whole mechanism built this session —
+CLAUDE.md distribution, session-start git-log continuity, and the
+cache-read-based five_hour notification — is now confirmed live for every
+session in the `kakeibo` environment**, not just locally simulated.
 
 ---
 
