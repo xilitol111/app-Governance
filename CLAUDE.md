@@ -46,6 +46,12 @@ re-deriving or re-loading things unnecessarily.
   `/clear` addresses topic-locality within one session (free, instant,
   user-run), `create_session` addresses the account-wide usage-window limit
   — apply whichever is actually relevant, and both where both apply.
+- No tool lets Claude run `/clear` on the user's behalf or pre-fill their
+  input — it can only be suggested. When suggesting it, put the bare
+  command alone on its own line as inline code (`` `/clear` ``), not
+  embedded mid-sentence: most clients render inline/fenced code with a
+  one-tap copy affordance, so the user can act on it without hunting for
+  the exact text or retyping it.
 - Commit meaningful progress at natural checkpoints, not only when a
   session feels "done." Sessions can end unexpectedly (container
   reclaimed, connection drop); uncommitted work does not survive to the
