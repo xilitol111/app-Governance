@@ -1,3 +1,45 @@
+## SessionStart now auto-surfaces a tail of docs/session-archive.md (same day, latest change)
+
+Follow-up to the previous entry: after implementing the proactive `create_session` +
+higher-frequency notification, user asked directly:「セッション開始時の挙動を引き継ぎ資料読むように
+と規定して自動化できないか？」(can the session-start behavior be made to mandate reading the
+handoff material, automatically?)
+
+This surfaced a real gap flagged in the same turn: the mechanical part (creating the session,
+handing over a link) was automated, but the *informational* handoff was not — a freshly created
+session only had `session-start.sh`'s git-log excerpt + `CLAUDE.md` to go on, not the actual
+conversational content of `docs/session-archive.md`. That file existed and was git-tracked, but
+nothing read it automatically; a new session would have to spend an explicit `Read` tool call
+(an LLM-directed action, not free) to open it, and CLAUDE.md's own hygiene guidance says *not* to
+read narrative files routinely — so in practice a new session likely wouldn't.
+
+**Fix, in `hooks/session-start.sh`:** added a second cheap, zero-LLM-cost stdout block (same
+mechanism as the existing git-log injection) that checks for `docs/session-archive.md` in the
+current project and, if present, prints its last 4000 bytes via `tail -c 4000`. This is pure
+shell — no tool call, no LLM involvement — so it costs nothing beyond the (small, bounded) size of
+the injected text itself. Deliberately a *tail*, not the whole file: `session-archive.md` is
+appended to forever across every past session in a project (by `archive-turn.py`), so injecting
+all of it on every session start would grow unbounded over the project's lifetime; the tail
+approximates "what was most recently going on," consistent with the existing git-log excerpt's
+"last 10 commits" bounded-window philosophy. Older content stays available for on-demand `Read`
+when actually needed, per CLAUDE.md's existing narrative-file guidance.
+
+**Verification:** `bash -n` syntax check passed. Ran the hook directly against this repo (no
+`docs/` dir here, since app-Governance isn't itself one of the target app projects) — confirmed
+the new block is skipped cleanly via the `[ -f ... ]` guard, no error, no empty section printed.
+Then simulated a throwaway project (`/tmp/sim-project`) with a `docs/session-archive.md`
+containing an old ~5KB entry followed by a short recent one, and ran the hook against it directly:
+confirmed the tail correctly dropped the old entry and preserved the most recent one intact.
+
+**Not touched:** the placeholder `session-start.sh` embedded inline in the Setup Script (in
+`README.md`) was intentionally left as-is — by existing design (see its own comment, and the
+2026-08-21 "made it network-free" entry below) that placeholder only bootstraps the *real*
+self-fetching `session-start.sh` and is replaced before the first session's SessionStart hook body
+would otherwise need to reflect every feature; only from the second session onward does the fully
+up-to-date, self-fetched version (with this tail block) actually run.
+
+---
+
 ## Notification frequency raised + Claude now proactively creates the replacement session (same day, latest change)
 
 User's question (after being told Claude itself can call `create_session`):

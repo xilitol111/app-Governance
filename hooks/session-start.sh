@@ -49,3 +49,19 @@ if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   echo "## Uncommitted changes"
   git status --short 2>/dev/null
 fi
+
+# Same zero-LLM-cost idea, for the handoff notes archive-turn.py writes:
+# surface a bounded TAIL of docs/session-archive.md (not the whole file —
+# it's appended to forever across every past session in this project, so
+# reading all of it would grow unbounded). This is what lets a session
+# spun up via create_session (e.g. the one the five-hour-limit notification
+# in archive-turn.py has Claude create proactively) actually pick up "what
+# was still open" without an LLM having to go Read the file itself — it's
+# already sitting in context the moment the session starts, for the cost
+# of a `tail`, not a tool call.
+ARCHIVE_FILE="docs/session-archive.md"
+if [ -f "$ARCHIVE_FILE" ]; then
+  echo
+  echo "## Recent session archive (tail of docs/session-archive.md)"
+  tail -c 4000 "$ARCHIVE_FILE" 2>/dev/null
+fi
