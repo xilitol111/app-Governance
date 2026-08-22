@@ -99,6 +99,69 @@ re-deriving or re-loading things unnecessarily.
   working here if they keep talking instead of moving. Don't wait for the
   user to suggest the switch themselves.
 
+## Loop engineering (autonomous fix/verify cycles)
+
+Applies whenever a session runs an autonomous "make a change, check it,
+retry" cycle (bug-fix loops, `/goal`, a checker/fixer subagent) inside an
+app repo — not this repo itself, which holds no app code. On the Pro plan,
+usage-window budget is the binding constraint for continuous multi-day
+development, so prefer the loop shape that gets the same verification
+rigor at the lowest token cost, not the most sophisticated one.
+
+- Never start an open-ended loop. Before the first iteration, fix an
+  explicit stopping condition: a mechanical quality bar (tests green, lint
+  clean, typecheck clean) *and* a hard iteration/time cap. "The AI still
+  seems to be making progress" is not a stopping condition.
+- Prefer mechanical verification over LLM-judged verification: wire
+  tests/lint/typecheck into the app repo's own `.claude/settings.json`
+  (`PostToolUse`/`Stop` hooks that shell out, mirroring this repo's own
+  `hooks/archive-turn.py` — no LLM call, so it costs nothing against the
+  usage window). Reach for an LLM-based checker/fixer subagent only for
+  judgment calls a linter/test genuinely can't make (spec conformance,
+  code smell), and only on higher-risk changes — each subagent call is a
+  full extra turn in its own context, not a free check.
+- On two consecutive failures on the same error inside one loop, hand off
+  to a fresh subagent turn instead of continuing to retry in the same
+  increasingly-polluted conversation — but don't stand up a dedicated
+  subagent per project unless that project's loop actually needs one.
+- `/goal` is fine for a narrowly-scoped, well-defined task, always with
+  both a max-iteration and max-time cap set explicitly. It's the most
+  expensive mechanism here (every retry is a full extra turn), so treat an
+  unscoped `/goal` as a real risk to the day's remaining usage window, not
+  a convenience.
+- Skip `/schedule` and unattended multi-agent "Agent Teams" loops on the
+  Pro plan entirely — periodic/background iteration with nobody watching
+  has no natural ceiling on usage-window consumption.
+- If the same multi-step task recurs across sessions, register it as a
+  Skill (`.claude/skills/`) rather than re-explaining it each time: a
+  skill adds only a name + one-line description to every turn's baseline
+  (much cheaper than the same instructions living in `CLAUDE.md`) and
+  loads its full body only when actually invoked.
+- Hold the phase sequence itself — requirements, design, implementation,
+  verification, release — as a shared mental model with the user, not
+  just a habit of producing artifacts. Before non-trivial work, name
+  which phase the task is in, and don't slide into the next phase's
+  actions (e.g. writing implementation code while the design is still
+  unreviewed) just because the conversation has momentum. The phase docs
+  below are how that shared understanding gets written down; writing the
+  file is not a substitute for actually respecting the phase boundary.
+- For anything beyond a small fix, write phase docs as external memory
+  before the loop starts — a short requirements note, a design note, an
+  implementation plan, as files, not just conversation. This is the
+  within-task version of the durable-file-handoff pattern from Session
+  scoping above, and it's what lets a `/clear`, a `/compact`, or a
+  hand-off to a fresh subagent resume the task correctly mid-way.
+- Gate implementation on a design review, not only on tests passing after
+  the fact: a design doc reviewed for two minutes before code exists is
+  cheaper than several loop iterations spent fixing a correct
+  implementation of a wrong design.
+- Keep three checkpoints human-owned no matter how automated the rest of
+  the loop is: reviewing the design doc before implementation starts,
+  deciding where to cut a long task into stopping points, and deciding
+  when to actually ship. None of these are things a linter or an LLM
+  verifier can substitute for, and none of them cost anything against the
+  usage window — they're the user's calls, not extra model turns.
+
 ## My own operating discipline
 
 - Don't spawn Explore/Plan subagents to rediscover context already held
