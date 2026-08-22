@@ -291,7 +291,7 @@ def append_cache_read_sample(lines, cwd):
     return total
 
 
-def maybe_notify(total, session_id, push_status):
+def maybe_notify(total, session_id, push_status, push_detail):
     if total is None or not NOTIFY_ENABLED:
         return None
 
@@ -315,10 +315,25 @@ def maybe_notify(total, session_id, push_status):
 
     if push_status == "pushed":
         push_clause = (
-            f"This turn's commit is confirmed pushed to origin (HEAD has no "
-            f"commits missing from any remote) — a fresh session would start "
+            f"This turn's commit is confirmed pushed to origin AND reachable "
+            f"from the repo's default branch — a fresh session would start "
             f"from fully current state, so create_session is safe to use as "
             f"normal if you escalate to it."
+        )
+    elif push_status == "pushed_off_default":
+        branch = (push_detail or {}).get("branch", "this branch")
+        default_branch = (push_detail or {}).get("default_branch", "the default branch")
+        push_clause = (
+            f"WARNING: this turn's commit IS pushed to origin, but on "
+            f"'{branch}' — not '{default_branch}', this repo's default "
+            f"branch. A new session's session-start.sh (and create_session's "
+            f"own repo source) only ever sees origin/{default_branch}, with "
+            f"no other channel back to this session's container, so it would "
+            f"NOT see any of this session's archived history even though "
+            f"nothing is technically unpushed. Do NOT call create_session "
+            f"yet — either get '{branch}' merged into '{default_branch}' "
+            f"first, or tell the user plainly that this session's work is "
+            f"parked on an unmerged branch instead of silently proceeding."
         )
     else:
         push_clause = (
@@ -362,7 +377,16 @@ def maybe_notify(total, session_id, push_status):
 
 def commit_and_push(cwd):
     """Commit any new archive content, then always check/attempt push and
-    report whether HEAD ends up fully synced with some remote-tracking ref.
+    report whether HEAD ends up fully synced with some remote-tracking ref
+    *on the repo's actual default branch* — not just synced with some
+    remote ref, which "git rev-list --not --remotes" alone is satisfied by
+    even when HEAD is sitting on an unmerged feature branch pushed to its
+    own remote branch (found 2026-08-22: this session itself was on
+    claude/loop-engineering-tasks-rqezrn, "git rev-list --count HEAD --not
+    --remotes" reported 0, i.e. "pushed" — but a create_session call at
+    that moment would have started a session against origin/main, which
+    doesn't have any of this. That's the actual thing "pushed" needs to
+    mean here).
 
     Runs the push check even when there's nothing new to commit this turn:
     git commit can succeed locally while a later git push is denied by the
@@ -370,18 +394,21 @@ def commit_and_push(cwd):
     intermittent denials on push specifically) — the old early-return-on-
     clean-status behavior meant a stuck push was never retried until new
     archive content happened to show up. git rev-list --count HEAD --not
-    --remotes is the source of truth (not a push subprocess's own return
-    code) because it reflects the actual invariant that matters — would a
-    fresh clone of origin have everything — and so also catches a commit
-    stuck from any earlier turn, not just this one.
+    --remotes is the source of truth for "did the push work" (not a push
+    subprocess's own return code) because it reflects the actual invariant
+    that matters — would a fresh clone of origin have everything — and so
+    also catches a commit stuck from any earlier turn, not just this one.
 
-    Returns "pushed" | "unpushed" | "no_repo" | "unknown".
+    Returns (status, detail):
+      status: "pushed" | "pushed_off_default" | "unpushed" | "no_repo" | "unknown"
+      detail: {"branch": ..., "default_branch": ...} when status is
+        "pushed_off_default", else None.
     """
     def run(*args):
         return subprocess.run(args, cwd=cwd, capture_output=True, text=True)
 
     if run("git", "rev-parse", "--is-inside-work-tree").returncode != 0:
-        return "no_repo"
+        return "no_repo", None
 
     existing = [f for f in TRACKED_FILES if os.path.exists(os.path.join(cwd, f))]
     if existing:
@@ -404,16 +431,42 @@ def commit_and_push(cwd):
 
     ahead = ahead_of_remotes()
     if ahead is None:
-        return "unknown"
-    if ahead == 0:
-        return "pushed"
+        return "unknown", None
+    if ahead != 0:
+        run("git", "push", "origin", "HEAD")
+        ahead = ahead_of_remotes()
+        if ahead is None:
+            return "unknown", None
+        if ahead != 0:
+            return "unpushed", None
 
-    run("git", "push", "origin", "HEAD")
+    # HEAD is reachable from *some* remote ref now — but is that ref the
+    # repo's default branch? Try the standard way to know the default
+    # branch (works when the clone recorded origin's HEAD symref), else
+    # fall back to checking the two conventional names directly.
+    default_ref = run("git", "symbolic-ref", "--short", "refs/remotes/origin/HEAD")
+    default_branch = None
+    if default_ref.returncode == 0 and default_ref.stdout.strip():
+        default_branch = default_ref.stdout.strip().split("/", 1)[-1]
+    else:
+        for candidate in ("main", "master"):
+            if run("git", "rev-parse", "--verify", f"origin/{candidate}").returncode == 0:
+                default_branch = candidate
+                break
 
-    ahead = ahead_of_remotes()
-    if ahead is None:
-        return "unknown"
-    return "pushed" if ahead == 0 else "unpushed"
+    if not default_branch:
+        # Can't determine it — don't manufacture a false-positive warning.
+        return "pushed", None
+
+    is_ancestor = run(
+        "git", "merge-base", "--is-ancestor", "HEAD", f"origin/{default_branch}"
+    )
+    if is_ancestor.returncode == 0:
+        return "pushed", None
+
+    branch_ref = run("git", "rev-parse", "--abbrev-ref", "HEAD")
+    branch = branch_ref.stdout.strip() if branch_ref.returncode == 0 else "unknown"
+    return "pushed_off_default", {"branch": branch, "default_branch": default_branch}
 
 
 def main():
@@ -432,8 +485,8 @@ def main():
 
     archive_latest_turn(lines, cwd)
     total = append_cache_read_sample(lines, cwd)
-    push_status = commit_and_push(cwd)
-    reason = maybe_notify(total, session_id, push_status)
+    push_status, push_detail = commit_and_push(cwd)
+    reason = maybe_notify(total, session_id, push_status, push_detail)
 
     if reason:
         print(json.dumps({

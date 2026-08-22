@@ -74,9 +74,14 @@ re-deriving or re-loading things unnecessarily.
   this session that matters already been written to a durable file, per
   the commit-discipline bullet below). `create_session`'s precondition is
   mechanical and stricter: the current project repo's `docs/session-
-  archive.md` must be confirmed *pushed* to origin, not just committed,
-  since a brand-new session only ever sees `origin/main` with no other
-  channel back to this session's container. A `/clear`-safe moment is not
+  archive.md` must be confirmed pushed to origin *and reachable from the
+  repo's actual default branch* — not just pushed to some branch, since a
+  brand-new session only ever sees `origin/<default>` with no other channel
+  back to this session's container. Being pushed to an unmerged feature
+  branch satisfies neither "committed" nor "safe" (`archive-turn.py`'s
+  `commit_and_push` reports this distinctly as `"pushed_off_default"`,
+  2026-08-22 — found live in this repo's own governance session, sitting on
+  a feature branch the whole time). A `/clear`-safe moment is not
   automatically a `create_session`-safe moment.
 - No tool lets Claude run `/clear` or `/compact` on the user's behalf or
   pre-fill their input — either can only be suggested, and the user
