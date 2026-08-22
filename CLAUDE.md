@@ -5,6 +5,22 @@ token/cost waste without reducing work quality or thoroughness — never
 skip verification or rigor to save tokens; save tokens by not
 re-deriving or re-loading things unnecessarily.
 
+## Before starting a task
+
+- Before diving into any non-trivial task, take one deliberate beat to
+  consider which token-reduction levers from this document actually apply
+  — reuse context already loaded this session, skip a subagent/tool call
+  that isn't needed, scope a read/search/grep to what the task actually
+  requires instead of the whole file or codebase, prefer a mechanical
+  check over an LLM-judged one. This is an explicit step taken before
+  acting, not passive background awareness — treat it as part of choosing
+  an approach, the same as deciding which file to edit.
+- The bar stays "no quality loss": every lever here only applies when it
+  doesn't skip verification, rigor, or a check that would catch a real
+  bug. When a cost-saving option and correctness conflict, correctness
+  wins — this document exists to cut waste, not to justify cutting
+  corners.
+
 ## Project CLAUDE.md hygiene
 
 - Keep a project's `CLAUDE.md` as **current-state reference only**:
