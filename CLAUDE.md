@@ -46,16 +46,18 @@ re-deriving or re-loading things unnecessarily.
   `/clear` addresses topic-locality within one session (free, instant,
   user-run), `create_session` addresses the account-wide usage-window limit
   — apply whichever is actually relevant, and both where both apply.
-- No tool lets Claude run `/clear` on the user's behalf or pre-fill their
-  input — it can only be suggested, and the user prefers this framed as an
-  explicit choice rather than buried in prose. When a natural boundary is
-  reached, use `AskUserQuestion` to ask directly (e.g. "clear now" vs.
-  "keep going") instead of just mentioning `/clear` in passing — a
+- No tool lets Claude run `/clear` or `/compact` on the user's behalf or
+  pre-fill their input — either can only be suggested, and the user
+  prefers this framed as an explicit choice rather than buried in prose.
+  When a natural boundary for either is reached, use `AskUserQuestion` to
+  ask directly (e.g. "clear now" vs. "keep going", or "compact now" vs.
+  "keep going") instead of just mentioning the command in passing — a
   clickable decision point is easier to act on than free text. If the
-  user picks "clear now," follow up with the bare command alone on its
-  own line as inline code (`` `/clear` ``), since Claude still can't run
-  it for them — most clients render inline/fenced code with a one-tap
-  copy affordance, so they can act on it without retyping.
+  user picks the compacting/clearing option, follow up with the bare
+  command alone on its own line as inline code (`` `/clear` `` or
+  `` `/compact` ``), since Claude still can't run it for them — most
+  clients render inline/fenced code with a one-tap copy affordance, so
+  they can act on it without retyping.
 - Commit meaningful progress at natural checkpoints, not only when a
   session feels "done." Sessions can end unexpectedly (container
   reclaimed, connection drop); uncommitted work does not survive to the
