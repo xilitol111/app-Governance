@@ -10,8 +10,9 @@ Claude Code運用ガイドラインの原本(source of truth)を管理するリ�
 - 本文は [`CLAUDE.md`](./CLAUDE.md) にある。
 - 配布・同期のロジックは [`hooks/`](./hooks) にある3本のフックスクリプトが担う:
   - **`hooks/session-start.sh`**(`SessionStart`フック、セッション開始ごとに1回)
-    このリポジトリの`main`から`CLAUDE.md`と`hooks/`配下の3ファイル自身を毎回re-fetchし
-    `~/.claude/`へ反映したあと、現在のプロジェクトの`git log --oneline -10`・直近1件の
+    このリポジトリの`main`から`CLAUDE.md`と`hooks/`配下の3ファイル自身を、
+    `raw.githubusercontent.com`への`curl`で毎回re-fetchし`~/.claude/`へ反映したあと、
+    現在のプロジェクトの`git log --oneline -10`・直近1件の
     コミットメッセージ全文・`git status --short`、さらに`docs/session-archive.md`が存在すれば
     その末尾4000バイト分を標準出力に出す。標準出力はセッション開始時に自動でコンテキストへ
     追加される仕組みを利用しており、CLAUDE.mdの内容が常に最新化されるのに加え、セッションが
@@ -56,34 +57,38 @@ Claude Code運用ガイドラインの原本(source of truth)を管理するリ�
   # This script does no network I/O on purpose — it only writes local files.
   # An earlier version ran `git clone` directly here and failed
   # ("Setup script failed", non-recoverable): this early in container
-  # provisioning, the environment's git-auth proxy injection isn't
-  # guaranteed to be ready yet, and this script runs under `set -e`-like
-  # all-or-nothing semantics with no visible logs to debug from. Instead,
-  # this just writes a minimal session-start.sh that does the real fetch —
-  # that script runs later, once a real session's git auth is live (verified
-  # working every session so far), and is itself tolerant of a failed fetch.
+  # provisioning, outbound access may not be guaranteed to be ready yet,
+  # and this script runs under `set -e`-like all-or-nothing semantics with
+  # no visible logs to debug from. Instead, this just writes a minimal
+  # session-start.sh that does the real fetch — that script runs later,
+  # once a real session's networking is live, and is itself tolerant of a
+  # failed fetch. It uses plain `curl` against raw.githubusercontent.com
+  # (app-Governance is public as of 2026-08-22), not `git clone` — so
+  # unlike the git-based version this repo used through 2026-08-21, it
+  # needs no auth of any kind and works from any environment with plain
+  # outbound HTTPS.
   cat > ~/.claude/hooks/session-start.sh << 'HOOK'
   #!/bin/bash
   set -uo pipefail
-  GOV_REPO="https://github.com/xilitol111/app-Governance"
-  GOV_CLONE="$HOME/.claude/governance-src"
-  if [ -d "$GOV_CLONE/.git" ]; then
-    git -C "$GOV_CLONE" fetch --quiet origin main 2>/dev/null \
-      && git -C "$GOV_CLONE" reset --quiet --hard origin/main 2>/dev/null
-  else
-    rm -rf "$GOV_CLONE"
-    git clone --quiet --depth 1 --branch main "$GOV_REPO" "$GOV_CLONE" 2>/dev/null
-  fi
-  if [ -d "$GOV_CLONE" ] && [ -f "$GOV_CLONE/CLAUDE.md" ]; then
+  GOV_RAW="https://raw.githubusercontent.com/xilitol111/app-Governance/main"
+  GOV_TMP=$(mktemp -d)
+  GOV_SYNC_OK=1
+  fetch() {
+    curl -fsSL "$GOV_RAW/$1" -o "$GOV_TMP/$(basename "$1")" 2>>"$GOV_TMP/.err" || GOV_SYNC_OK=0
+  }
+  fetch "CLAUDE.md"
+  fetch "hooks/session-start.sh"
+  fetch "hooks/archive-turn.py"
+  fetch "hooks/session-end.py"
+  if [ "$GOV_SYNC_OK" = "1" ]; then
     mkdir -p ~/.claude/hooks
-    cp "$GOV_CLONE/CLAUDE.md" ~/.claude/CLAUDE.md
+    cp "$GOV_TMP/CLAUDE.md" ~/.claude/CLAUDE.md
     for f in session-start.sh archive-turn.py session-end.py; do
-      if [ -f "$GOV_CLONE/hooks/$f" ]; then
-        cp "$GOV_CLONE/hooks/$f" ~/.claude/hooks/"$f"
-        chmod +x ~/.claude/hooks/"$f"
-      fi
+      cp "$GOV_TMP/$f" ~/.claude/hooks/"$f"
+      chmod +x ~/.claude/hooks/"$f"
     done
   fi
+  rm -rf "$GOV_TMP"
   if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     echo "## Recent commits"
     git log --oneline -10 2>/dev/null
@@ -158,13 +163,15 @@ Claude Code運用ガイドラインの原本(source of truth)を管理するリ�
 この仕組みは`kakeibo`環境専用。ローカルPCや別のClaude Code環境でも同じ内容を効かせたい場合は、
 それぞれの環境で同じSetup Script(またはそれに相当する初期化手順)を個別に設定する必要がある。
 
-**Setup Scriptを登録するだけでは不十分。** `session-start.sh`内の`git clone`/`git fetch`が
-成功するには、その環境(セッション)自身がapp-Governanceへのgitアクセス権限(リポジトリスコープ)
-を持っている必要がある。2026-08-22、`xilitol111/game`用の別環境で実際に検証したところ、
-Setup Script自体は正しく登録されていた(`session-start.sh`は実体あり、settings.jsonのフック
-登録も正常)にもかかわらず、その環境のGitHubアクセスが`xilitol111/game`のみにスコープされて
-おり`app-Governance`が対象外だったため、`git clone`が`fatal: could not read Username`で
-**毎セッション無音のまま失敗し続けていた**(`2>/dev/null`で握りつぶされていたため気づけな
-かった)。現在は失敗時に`## Governance sync: FAILED`とエラー内容をセッション開始時の出力に
-必ず表示するよう`session-start.sh`を修正済み(この行が出たら、その環境にapp-Governanceへの
-リポジトリアクセスを追加するか、非git経由の配布方式に切り替える必要がある)。
+**過去の既知問題(2026-08-22 解決済み)。** 当時この配布は`git clone`ベースで、
+`xilitol111/game`用の別環境で検証したところ、Setup Script自体は正しく登録されていた
+(`session-start.sh`は実体あり、settings.jsonのフック登録も正常)にもかかわらず、その環境の
+GitHubアクセスが`xilitol111/game`のみにスコープされておりapp-Governanceが対象外だったため、
+`git clone`が`fatal: could not read Username`で毎セッション無音のまま失敗し続けていた
+(`2>/dev/null`で握りつぶされていたため気づけなかった)。**対応として同日、本リポジトリを
+publicにしたうえで配布方式を`git clone`から`curl`(`raw.githubusercontent.com`への直接取得)
+に切り替えた。** これにより環境ごとのgitアクセススコープに一切依存しなくなり、Setup Scriptさえ
+登録すれば(=リポジトリアクセス権限の個別付与なしに)どの環境でも配布が効くようになった。
+失敗時に`## Governance sync: FAILED`とエラー内容をセッション開始時の出力に必ず表示する仕組み
+(`session-start.sh`)は、今後別の理由(GitHub全体の障害など、稀にしか起きないはずの事象)で
+失敗した場合の可視化として引き続き残している。

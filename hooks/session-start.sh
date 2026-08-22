@@ -4,53 +4,57 @@
 # so logic/content updates apply on the next session without touching the
 # environment settings again. See ../README.md for the install step.
 #
-# Uses `git clone`/`git pull` rather than `curl` to raw.githubusercontent.com:
-# app-Governance is a private repository, so unauthenticated curl to the raw
-# CDN always 404s (confirmed 2026-08-21 — even for nonexistent paths, the
-# signature of a private repo). git operations against github.com work
-# IF AND ONLY IF the current session's environment has app-Governance in its
-# authorized repo scope — the outbound proxy injects git-smart-HTTP
-# credentials per repo, not globally. Confirmed 2026-08-22: a session running
-# in an environment scoped only to a different repo (e.g. xilitol111/game)
-# gets a bare `fatal: could not read Username` here, every single session,
-# with no other symptom — which is exactly why this block's success/failure
-# is echoed below instead of silenced. If you see "Governance sync: FAILED"
-# on session start, this environment needs app-Governance added to its
-# authorized repo scope (or the repo needs another distribution path that
-# doesn't depend on git auth, e.g. making it public).
+# Uses plain `curl` against raw.githubusercontent.com, not `git clone`.
+# app-Governance was private through 2026-08-21, so unauthenticated curl to
+# the raw CDN always 404'd and git (authenticated transparently by the
+# environment's outbound proxy, but ONLY for repos in the current session's
+# authorized scope) was the only option — which silently failed in any
+# environment/session not scoped to this repo (confirmed 2026-08-22 against
+# a `xilitol111/game` session: bare `fatal: could not read Username`, every
+# time, with nothing surfaced anywhere). Made public 2026-08-22 specifically
+# to remove that per-environment scope dependency: curl to the raw CDN now
+# works from any environment with plain outbound HTTPS, no auth of any kind
+# needed. If this ever needs to go private again, this block has to revert
+# to the git-clone approach (see git history around 2026-08-22 for it) and
+# every environment that should receive governance updates will again need
+# app-Governance explicitly added to its authorized repo scope.
 set -uo pipefail
 
-GOV_REPO="https://github.com/xilitol111/app-Governance"
-GOV_CLONE="$HOME/.claude/governance-src"
+GOV_RAW="https://raw.githubusercontent.com/xilitol111/app-Governance/main"
+GOV_TMP=$(mktemp -d)
+GOV_SYNC_OK=1
 
-if [ -d "$GOV_CLONE/.git" ]; then
-  GOV_SYNC_ERR=$( { git -C "$GOV_CLONE" fetch --quiet origin main \
-    && git -C "$GOV_CLONE" reset --quiet --hard origin/main; } 2>&1 )
-else
-  rm -rf "$GOV_CLONE"
-  GOV_SYNC_ERR=$(git clone --quiet --depth 1 --branch main "$GOV_REPO" "$GOV_CLONE" 2>&1)
-fi
+fetch() {
+  curl -fsSL "$GOV_RAW/$1" -o "$GOV_TMP/$(basename "$1")" 2>>"$GOV_TMP/.err" || GOV_SYNC_OK=0
+}
 
-if [ -d "$GOV_CLONE" ] && [ -f "$GOV_CLONE/CLAUDE.md" ]; then
+fetch "CLAUDE.md"
+fetch "hooks/session-start.sh"
+fetch "hooks/archive-turn.py"
+fetch "hooks/session-end.py"
+
+# All-or-nothing: only replace the live files once every fetch above
+# succeeded, so a mid-fetch network hiccup can't leave CLAUDE.md and the
+# hooks on mismatched versions of each other.
+if [ "$GOV_SYNC_OK" = "1" ]; then
   mkdir -p ~/.claude/hooks
-  cp "$GOV_CLONE/CLAUDE.md" ~/.claude/CLAUDE.md
+  cp "$GOV_TMP/CLAUDE.md" ~/.claude/CLAUDE.md
   for f in session-start.sh archive-turn.py session-end.py; do
-    if [ -f "$GOV_CLONE/hooks/$f" ]; then
-      cp "$GOV_CLONE/hooks/$f" ~/.claude/hooks/"$f"
-      chmod +x ~/.claude/hooks/"$f"
-    fi
+    cp "$GOV_TMP/$f" ~/.claude/hooks/"$f"
+    chmod +x ~/.claude/hooks/"$f"
   done
-  echo "## Governance sync: OK ($(git -C "$GOV_CLONE" log -1 --format='%h %s' 2>/dev/null))"
+  echo "## Governance sync: OK (curl, public repo)"
 else
   echo "## Governance sync: FAILED"
   echo "~/.claude/CLAUDE.md and hooks were NOT updated this session — whatever"
   echo "was already there (possibly stale, possibly empty placeholder files) is"
-  echo "still in effect. This environment likely lacks git access to"
-  echo "app-Governance; see the comment above this block for the fix."
-  if [ -n "${GOV_SYNC_ERR:-}" ]; then
-    echo "git error: $GOV_SYNC_ERR"
+  echo "still in effect. This should only happen if this environment has no"
+  echo "outbound HTTPS at all, or GitHub itself is unreachable."
+  if [ -f "$GOV_TMP/.err" ]; then
+    echo "curl error: $(cat "$GOV_TMP/.err")"
   fi
 fi
+rm -rf "$GOV_TMP"
 echo
 
 # Cheap, zero-LLM-cost continuity: surface recent git history of the CURRENT
