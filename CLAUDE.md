@@ -137,6 +137,22 @@ rigor at the lowest token cost, not the most sophisticated one.
   skill adds only a name + one-line description to every turn's baseline
   (much cheaper than the same instructions living in `CLAUDE.md`) and
   loads its full body only when actually invoked.
+- For anything beyond a small fix, write phase docs as external memory
+  before the loop starts — a short requirements note, a design note, an
+  implementation plan, as files, not just conversation. This is the
+  within-task version of the durable-file-handoff pattern from Session
+  scoping above, and it's what lets a `/clear`, a `/compact`, or a
+  hand-off to a fresh subagent resume the task correctly mid-way.
+- Gate implementation on a design review, not only on tests passing after
+  the fact: a design doc reviewed for two minutes before code exists is
+  cheaper than several loop iterations spent fixing a correct
+  implementation of a wrong design.
+- Keep three checkpoints human-owned no matter how automated the rest of
+  the loop is: reviewing the design doc before implementation starts,
+  deciding where to cut a long task into stopping points, and deciding
+  when to actually ship. None of these are things a linter or an LLM
+  verifier can substitute for, and none of them cost anything against the
+  usage window — they're the user's calls, not extra model turns.
 
 ## My own operating discipline
 
