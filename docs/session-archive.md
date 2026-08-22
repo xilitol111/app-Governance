@@ -898,3 +898,13 @@ GAMEには現状CIが無く、「build/lint/tsc + ランダムプレイアウト
 前回未確認のままです。動いていなければkakeibo側は今後も「見えない」ままになります。
 
 どれから着手しますか。2と5はこのセッションからでも(app-Governance側のコード変更、または確認作業として)進められますが、1・3・4はGAME/kakeiboへの書き込み権限が必要です。
+
+---
+<!-- uuid:a7c25662-9040-4e4d-9a45-ee516cf0dd90 -->
+**2026-08-22T17:25:34.687Z**
+
+`docs/plans/token-consumption-followups.md` にTODOとして記録し、PR #8のブランチにpushしました。
+
+- 6項目を優先度順に記載(CI移行・PRマージ境界での`/clear`コード化・kakeibo CLAUDE.md分割・GAME CLAUDE.mdの先手ケア・kakeibo側hookの動作確認・セグメント4アーティファクトの再検証)
+- GAME/kakeiboへの書き込みが必要な項目には明示的にマーク済み
+- 次回新規セッションは`git log`の直近コミット一覧からこのファイルの存在に気づけ、既存の分析(Artifact・session-archive.md)を再導出せずにこのファイルだけ読めば作業に入れる形にしてあります
