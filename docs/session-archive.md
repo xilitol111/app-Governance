@@ -327,3 +327,32 @@ push完了、PR #1に反映されました。
 181行、11,511バイト(約11.2KB)です。
 
 CLAUDE.md自身の「Project CLAUDE.md hygiene」節にある「数百行を超えて歴史的記述が現状参照より多くなったら分割」という基準にはまだ達していませんが、今回のLoop engineering節追加(3コミットで計63行)で当初(119行)から約1.5倍に増えています。全体はまだ現状参照(規約)のみで歴史的記述は含んでいないので、分割は不要な段階です。
+
+---
+<!-- uuid:8356ebe2-24f2-41b0-af64-8eb20f082cce -->
+**2026-08-22T01:57:14.764Z**
+
+## 配布方式(このリポジトリの仕組み)
+
+**構造:** app-Governanceは「ガイドライン本文だけ」を持つリポジトリで、アプリのコード自体はGAME/kakeibo/kakeibo-liffなど各プロジェクトのリポジトリ側に別途ある。配布は3本のフックスクリプトが担っている。
+
+### 1. 初回セットアップ(`kakeibo`環境のSetup Script、1回だけ)
+- `kakeibo`環境(`env_01CH8G8RmBJwUGCWuLdsJFGj`)の環境設定画面に登録されたシェルスクリプトが、環境のコンテナが立ち上がった最初の一瞬にだけ実行される。
+- ただしこの初回スクリプト自体は**ネットワーク通信をしない**(provisioning初期はgit認証プロキシがまだ準備できていない可能性があるため)。代わりに、実際にfetchする`~/.claude/hooks/session-start.sh`というスクリプトをローカルに書き込むだけ。
+- 同時に`~/.claude/settings.json`に`SessionStart`/`Stop`/`SessionEnd`の3フックを登録する(既存設定があればマージ、上書きしない)。
+
+### 2. 毎セッション開始時(`hooks/session-start.sh`、`SessionStart`フック)
+- 実際のセッションが始まってgit認証が有効になったタイミングで、app-Governanceの`main`ブランチを`~/.claude/governance-src`に`git clone --depth 1`(2回目以降は`fetch`+`reset --hard`)。
+- そこから`CLAUDE.md`と`hooks/`配下3ファイル自身を`~/.claude/`へ**毎回上書きコピー**する。つまりこのリポジトリの`main`を更新するだけで、次にどのプロジェクトでセッションが開かれても自動的に最新版が反映される(Setup Scriptを触り直す必要なし)。
+- あわせて`git log --oneline -10`・直近コミット全文・`git status --short`・`docs/session-archive.md`末尾をコンテキストに出力。
+
+### 3. 毎ターン終了時(`hooks/archive-turn.py`、`Stop`フック)
+- Claudeの発言を各プロジェクトの`docs/session-archive.md`にローカル追記するだけ(LLM呼び出しなし)。five時間利用枠監視用のトークン累積も記録。
+
+### 4. セッション終了時(`hooks/session-end.py`、`SessionEnd`フック)
+- `docs/session-archive.md`に変更があれば、**ユーザー確認なしに自動で**1コミットにまとめてpush(このファイル専用の動作に限定)。
+
+### 5. 補助: 五時間枠アンカーRoutine
+- 毎朝JST9時に`kakeibo`環境で軽いセッションを1つ起動し、five_hour利用枠のリセット境界を早める節約策(`trig_01SKn2a7Y6on7ZDnoKzTTk6H`)。
+
+**更新方法:** `CLAUDE.md`やフックを編集して`main`にマージするだけ。**適用範囲は`kakeibo`環境限定**で、別マシン/別環境で同じ仕組みを効かせるには、それぞれに同じSetup Scriptを個別登録する必要がある。
