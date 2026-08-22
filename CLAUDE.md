@@ -137,6 +137,14 @@ rigor at the lowest token cost, not the most sophisticated one.
   skill adds only a name + one-line description to every turn's baseline
   (much cheaper than the same instructions living in `CLAUDE.md`) and
   loads its full body only when actually invoked.
+- Hold the phase sequence itself — requirements, design, implementation,
+  verification, release — as a shared mental model with the user, not
+  just a habit of producing artifacts. Before non-trivial work, name
+  which phase the task is in, and don't slide into the next phase's
+  actions (e.g. writing implementation code while the design is still
+  unreviewed) just because the conversation has momentum. The phase docs
+  below are how that shared understanding gets written down; writing the
+  file is not a substitute for actually respecting the phase boundary.
 - For anything beyond a small fix, write phase docs as external memory
   before the loop starts — a short requirements note, a design note, an
   implementation plan, as files, not just conversation. This is the
