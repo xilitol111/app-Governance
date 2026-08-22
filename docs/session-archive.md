@@ -356,3 +356,52 @@ CLAUDE.md自身の「Project CLAUDE.md hygiene」節にある「数百行を超�
 - 毎朝JST9時に`kakeibo`環境で軽いセッションを1つ起動し、five_hour利用枠のリセット境界を早める節約策(`trig_01SKn2a7Y6on7ZDnoKzTTk6H`)。
 
 **更新方法:** `CLAUDE.md`やフックを編集して`main`にマージするだけ。**適用範囲は`kakeibo`環境限定**で、別マシン/別環境で同じ仕組みを効かせるには、それぞれに同じSetup Scriptを個別登録する必要がある。
+
+---
+<!-- uuid:d6d59829-aea5-43be-8c7f-a9ac87edac96 -->
+**2026-08-22T02:00:43.148Z**
+
+GAME/kakeibo/kakeibo-liffなど各リポジトリの新規セッションの冒頭で貼り付けて使う診断用プロンプトです。`~/.claude/`配下の実ファイルとapp-Governance側のソースを突き合わせて、配布が正しく効いているかを機械的にチェックさせる内容にしています。
+
+```
+app-Governanceの配布が正しく効いているか診断してください。以下を順に確認し、
+最後に✅/❌のチェックリストでまとめて報告してください(推測せず、実際にコマンドを
+実行して確認すること)。
+
+1. ~/.claude/governance-src が存在し、xilitol111/app-Governance の main ブランチの
+   clone になっているか。`git -C ~/.claude/governance-src log -1 --oneline` と
+   `git -C ~/.claude/governance-src remote -v` を実行して確認。
+
+2. ~/.claude/CLAUDE.md が ~/.claude/governance-src/CLAUDE.md と完全に一致しているか。
+   `diff ~/.claude/CLAUDE.md ~/.claude/governance-src/CLAUDE.md` を実行し、差分が
+   ないことを確認。差分がある場合はその内容も報告。
+
+3. ~/.claude/CLAUDE.md に最近追加されたはずの目印(例: "Loop engineering
+   (autonomous fix/verify cycles)" という見出し)が含まれているか
+   `grep -q "Loop engineering" ~/.claude/CLAUDE.md` で確認。
+
+4. ~/.claude/hooks/ 配下の session-start.sh・archive-turn.py・session-end.py が
+   存在し、実行可能(chmod +x 済み)で、~/.claude/governance-src/hooks/ 配下の
+   同名ファイルと内容が一致しているか。3ファイルそれぞれ diff で確認。
+
+5. ~/.claude/settings.json の "hooks" に SessionStart→session-start.sh、
+   Stop→archive-turn.py、SessionEnd→session-end.py の3エントリが登録されているか。
+   `cat ~/.claude/settings.json` の中身を見て確認。
+
+6. このリポジトリ(現在のプロジェクト)に docs/session-archive.md が存在し、
+   直近のタイムスタンプ(数分〜数時間以内)のエントリが追記されているか。
+   `tail -30 docs/session-archive.md` で確認 — これはStopフックが実際に
+   毎ターン発火している証拠になる。
+
+7. (このセッションが kakeibo 環境で動いている場合のみ)
+   five時間枠アンカーRoutine(trig_01SKn2a7Y6on7ZDnoKzTTk6H)が有効か
+   list_triggers で確認。他環境なら「対象外」でよい。
+
+最後に:
+- 全部✅なら「配布は正常に機能している」と一言で結論。
+- ❌が1つでもあれば、原因の推測(例: セッション開始時にfetchが失敗した、
+  Setup Scriptがこの環境に登録されていない等)と、次に何を確認すべきかを
+  具体的に提案すること。
+```
+
+**使い方:** 各アプリリポジトリで新しいセッションを開始し、冒頭でこのプロンプトを貼り付けるだけです。`session-start.sh`は毎セッション自動でgovernance-srcを再fetchするので、このプロンプト自体はその後の状態を検証するだけで十分です(自分でfetchし直す必要はありません)。
