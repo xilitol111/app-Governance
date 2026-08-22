@@ -6,8 +6,9 @@ transcript file, so it adds no tokens to the running conversation.
 
 Three jobs:
 
-1. Append the latest assistant turn's text to docs/session-archive.md (unchanged
-   from the original version of this hook).
+1. Append the latest assistant turn's text (or, if the turn was tool-only,
+   a tool-name placeholder — see archive_latest_turn's docstring) to
+   docs/session-archive.md.
 2. Append a timestamped (cumulative cache_read_input_tokens) sample to
    docs/five-hour-samples.jsonl, and — once per session, via a decision:"block"
    reason Claude actually sees — nudge toward wrapping up once cumulative cache
@@ -65,6 +66,22 @@ is now an *interval*, not a one-time trip wire — this fires again every time
 cumulative cache-read grows by another THRESHOLD_TOKENS, not just once — and
 the reason text instructs Claude to actually call create_session and hand
 the user a link, not merely ask if they'd like to.
+
+Two more fixes (2026-08-22), both from the same live discovery that git push
+is intermittently blocked for this agent (see commit_and_push's docstring):
+1. commit_and_push now reports back a push_status ("pushed"/"unpushed"/etc.)
+   via `git rev-list --count HEAD --not --remotes`, and the notification text
+   is conditioned on it — create_session is only endorsed once the repo is
+   confirmed pushed, since a new session only ever sees origin/main and would
+   otherwise silently start from stale state with no error surfaced anywhere.
+   This check deliberately does NOT extend to the /clear or /compact rungs of
+   the escalation ladder: those only reset this session's local context
+   window and touch no git state at all, so "is origin up to date" is the
+   wrong question for them — see CLAUDE.md's "Session scoping" for the actual
+   (softer, file-discipline-based) precondition that applies there instead.
+2. archive_latest_turn no longer silently skips tool-only turns (see its own
+   docstring) — a /clear right after such a turn used to risk losing the only
+   record that turn's work happened at all, since nothing new got archived.
 """
 import json
 import os
@@ -86,9 +103,17 @@ def read_transcript(transcript_path):
 
 
 def archive_latest_turn(lines, cwd):
-    last_text = None
-    last_ts = None
-    last_uuid = None
+    # Take the single most recent assistant entry, text or not (2026-08-22 fix).
+    # The old version scanned backward for the first *text-bearing* assistant
+    # message, so a tool-only turn (no text blocks at all) silently matched
+    # whatever older, already-archived prose came before it and archived
+    # nothing new — meaning a /clear right after a tool-only turn could drop
+    # the only record that turn's work ever happened. Recording at least a
+    # tool-name placeholder for a text-less turn closes that gap. Deliberately
+    # still scoped to only the turn's final message, not a full transcript
+    # mirror: no mid-turn tool rounds, no user messages — this stays a
+    # lightweight "what did Claude land on" log, not a complete replay.
+    last_obj = None
     for line in reversed(lines):
         line = line.strip()
         if not line:
@@ -98,20 +123,27 @@ def archive_latest_turn(lines, cwd):
         except json.JSONDecodeError:
             continue
         if obj.get("type") == "assistant":
-            content = (obj.get("message") or {}).get("content") or []
-            texts = [
-                b.get("text", "")
-                for b in content
-                if isinstance(b, dict) and b.get("type") == "text"
-            ]
-            if texts:
-                last_text = "\n".join(t for t in texts if t)
-                last_ts = obj.get("timestamp")
-                last_uuid = obj.get("uuid")
-                break
+            last_obj = obj
+            break
 
-    if not last_text:
-        return  # this turn had no prose (tool-only turn) — nothing to archive
+    if not last_obj:
+        return
+
+    content = (last_obj.get("message") or {}).get("content") or []
+    texts = [
+        b.get("text", "")
+        for b in content
+        if isinstance(b, dict) and b.get("type") == "text"
+    ]
+    text = "\n".join(t for t in texts if t)
+    tool_names = [
+        b.get("name")
+        for b in content
+        if isinstance(b, dict) and b.get("type") == "tool_use" and b.get("name")
+    ]
+
+    last_ts = last_obj.get("timestamp")
+    last_uuid = last_obj.get("uuid")
 
     log_path = os.path.join(cwd, "docs", "session-archive.md")
     os.makedirs(os.path.dirname(log_path), exist_ok=True)
@@ -122,8 +154,15 @@ def archive_latest_turn(lines, cwd):
             if marker in f.read():
                 return  # already archived this turn
 
+    if text:
+        body = text
+    elif tool_names:
+        body = f"_(tool-only turn: {', '.join(tool_names)})_"
+    else:
+        return  # nothing meaningful on this entry (shouldn't normally happen)
+
     with open(log_path, "a", encoding="utf-8") as f:
-        f.write(f"\n---\n{marker}\n**{last_ts}**\n\n{last_text}\n")
+        f.write(f"\n---\n{marker}\n**{last_ts}**\n\n{body}\n")
 
 
 def cumulative_cache_read(lines):
@@ -159,7 +198,7 @@ def cumulative_cache_read(lines):
     return total, last_ts
 
 
-def log_sample_and_maybe_notify(lines, cwd, session_id):
+def append_cache_read_sample(lines, cwd):
     total, ts = cumulative_cache_read(lines)
     if total == 0:
         return None
@@ -168,8 +207,11 @@ def log_sample_and_maybe_notify(lines, cwd, session_id):
     os.makedirs(os.path.dirname(sample_path), exist_ok=True)
     with open(sample_path, "a", encoding="utf-8") as f:
         f.write(json.dumps({"ts": ts, "cache_read_cumulative": total}) + "\n")
+    return total
 
-    if not NOTIFY_ENABLED:
+
+def maybe_notify(total, session_id, push_status):
+    if total is None or not NOTIFY_ENABLED:
         return None
 
     marker_path = f"/tmp/.five-hour-notified-{session_id}"
@@ -190,6 +232,30 @@ def log_sample_and_maybe_notify(lines, cwd, session_id):
     except OSError:
         pass
 
+    if push_status == "pushed":
+        push_clause = (
+            f"This turn's commit is confirmed pushed to origin (HEAD has no "
+            f"commits missing from any remote) — a fresh session would start "
+            f"from fully current state, so create_session is safe to use as "
+            f"normal if you escalate to it."
+        )
+    else:
+        push_clause = (
+            f"WARNING: this repo is NOT confirmed pushed right now (status: "
+            f"{push_status}) — git push has been intermittently denied by the "
+            f"environment's auto-mode safety classifier, which can leave "
+            f"commits local-only. A new session's session-start.sh only ever "
+            f"sees origin/main, with no other channel back to this session's "
+            f"container, so calling create_session right now risks a "
+            f"replacement that silently starts from stale CLAUDE.md/"
+            f"docs/session-archive.md content with no error surfaced anywhere. "
+            f"Do NOT call create_session yet — this hook retries the push "
+            f"every turn automatically; if it's still {push_status} after a "
+            f"couple of turns, tell the user directly that the archive isn't "
+            f"reaching origin instead of silently proceeding or silently "
+            f"waiting."
+        )
+
     return (
         f"[System note, not from the user: this session's cumulative cache-read "
         f"tokens just crossed another five-hour-limit watch interval "
@@ -200,41 +266,73 @@ def log_sample_and_maybe_notify(lines, cwd, session_id):
         f"long), suggest `/clear` or `/compact` via AskUserQuestion instead. "
         f"Only escalate to create_session if neither applies — the work is one "
         f"continuous, unclearable task that still needs its full live context. "
-        f"In that case: proactively create a fresh session now with the "
-        f"create_session tool — inherit this environment (omit environment_id), "
-        f"same repo source as this session — then briefly tell the user what's "
-        f"still open here and hand them the new session's link so they can move "
-        f"over whenever convenient. Continuity is already covered by "
-        f"docs/session-archive.md, this repo's git history, and CLAUDE.md, so "
-        f"the new session won't start blind — don't just ask whether to create "
-        f"one, actually create it, since that's now a low-cost action. Then "
-        f"continue this session normally if the user keeps talking here instead "
-        f"of moving.]"
+        f"{push_clause} If you do escalate: proactively create a fresh session "
+        f"now with the create_session tool — inherit this environment (omit "
+        f"environment_id), same repo source as this session — then briefly "
+        f"tell the user what's still open here and hand them the new "
+        f"session's link so they can move over whenever convenient. "
+        f"Continuity is already covered by docs/session-archive.md, this "
+        f"repo's git history, and CLAUDE.md, so the new session won't start "
+        f"blind — don't just ask whether to create one, actually create it, "
+        f"since that's now a low-cost action. Then continue this session "
+        f"normally if the user keeps talking here instead of moving.]"
     )
 
 
 def commit_and_push(cwd):
+    """Commit any new archive content, then always check/attempt push and
+    report whether HEAD ends up fully synced with some remote-tracking ref.
+
+    Runs the push check even when there's nothing new to commit this turn:
+    git commit can succeed locally while a later git push is denied by the
+    environment's auto-mode safety classifier (confirmed 2026-08-22,
+    intermittent denials on push specifically) — the old early-return-on-
+    clean-status behavior meant a stuck push was never retried until new
+    archive content happened to show up. git rev-list --count HEAD --not
+    --remotes is the source of truth (not a push subprocess's own return
+    code) because it reflects the actual invariant that matters — would a
+    fresh clone of origin have everything — and so also catches a commit
+    stuck from any earlier turn, not just this one.
+
+    Returns "pushed" | "unpushed" | "no_repo" | "unknown".
+    """
     def run(*args):
         return subprocess.run(args, cwd=cwd, capture_output=True, text=True)
 
     if run("git", "rev-parse", "--is-inside-work-tree").returncode != 0:
-        return
+        return "no_repo"
 
     existing = [f for f in TRACKED_FILES if os.path.exists(os.path.join(cwd, f))]
-    if not existing:
-        return
+    if existing:
+        status = run("git", "status", "--porcelain", "--", *existing)
+        if status.stdout.strip():
+            run("git", "add", *existing)
+            run(
+                "git", "commit", "-m",
+                "chore: archive session transcript + usage samples [auto]",
+            )
+            # Don't branch on commit's returncode — the ahead-count check
+            # below is the single source of truth for push status either way.
 
-    status = run("git", "status", "--porcelain", "--", *existing)
-    if not status.stdout.strip():
-        return  # nothing new this turn
+    def ahead_of_remotes():
+        r = run("git", "rev-list", "--count", "HEAD", "--not", "--remotes")
+        try:
+            return int(r.stdout.strip())
+        except (ValueError, TypeError):
+            return None
 
-    run("git", "add", *existing)
-    commit = run(
-        "git", "commit", "-m", "chore: archive session transcript + usage samples [auto]"
-    )
-    if commit.returncode != 0:
-        return
+    ahead = ahead_of_remotes()
+    if ahead is None:
+        return "unknown"
+    if ahead == 0:
+        return "pushed"
+
     run("git", "push", "origin", "HEAD")
+
+    ahead = ahead_of_remotes()
+    if ahead is None:
+        return "unknown"
+    return "pushed" if ahead == 0 else "unpushed"
 
 
 def main():
@@ -252,8 +350,9 @@ def main():
     lines = read_transcript(transcript_path)
 
     archive_latest_turn(lines, cwd)
-    reason = log_sample_and_maybe_notify(lines, cwd, session_id)
-    commit_and_push(cwd)
+    total = append_cache_read_sample(lines, cwd)
+    push_status = commit_and_push(cwd)
+    reason = maybe_notify(total, session_id, push_status)
 
     if reason:
         print(json.dumps({

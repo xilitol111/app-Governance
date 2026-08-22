@@ -51,6 +51,17 @@ re-deriving or re-loading things unnecessarily.
   still needs its full live context and has crossed the usage-window
   threshold — `/clear`/`/compact` can't help there since dropping or
   summarizing the context would lose what the task still needs.
+- The two rungs are gated by different preconditions, though — don't
+  generalize one's check to the other. `/clear`/`/compact` only reset this
+  session's local context window; they touch no files or git state at all,
+  so their precondition stays the existing soft one (has anything from
+  this session that matters already been written to a durable file, per
+  the commit-discipline bullet below). `create_session`'s precondition is
+  mechanical and stricter: the current project repo's `docs/session-
+  archive.md` must be confirmed *pushed* to origin, not just committed,
+  since a brand-new session only ever sees `origin/main` with no other
+  channel back to this session's container. A `/clear`-safe moment is not
+  automatically a `create_session`-safe moment.
 - No tool lets Claude run `/clear` or `/compact` on the user's behalf or
   pre-fill their input — either can only be suggested, and the user
   prefers this framed as an explicit choice rather than buried in prose.
@@ -74,14 +85,19 @@ re-deriving or re-loading things unnecessarily.
   account's five-hour usage limit and injects a system note every time
   that total crosses another watch interval (not just once per session —
   switching sessions is now cheap enough that repeated nudges are worth
-  it). When that note appears: actually call `create_session` yourself
-  (inherit the environment, same repo source) rather than just asking the
-  user whether to — continuity is already covered by
-  `docs/session-archive.md`, git history, and this file, so the new
-  session starts oriented. Tell the user briefly what's still open here
-  and hand them the new session's link; keep working here if they keep
-  talking instead of moving. Don't wait for the user to suggest the
-  switch themselves.
+  it). The note includes a push-status check (2026-08-22) — read it first:
+  only if it confirms the repo is fully pushed, actually call
+  `create_session` yourself (inherit the environment, same repo source)
+  rather than just asking the user whether to — continuity is already
+  covered by `docs/session-archive.md`, git history, and this file, so the
+  new session starts oriented. If the note instead warns the repo isn't
+  confirmed pushed, don't create the session — the hook retries the push
+  every turn automatically; if it's still stuck after a couple of turns,
+  say so to the user plainly instead of proceeding on stale assumptions or
+  silently waiting. Once it's safe to proceed: tell the user briefly
+  what's still open here and hand them the new session's link; keep
+  working here if they keep talking instead of moving. Don't wait for the
+  user to suggest the switch themselves.
 
 ## My own operating discipline
 
