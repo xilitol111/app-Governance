@@ -330,10 +330,14 @@ def maybe_notify(total, session_id, push_status, push_detail):
             f"own repo source) only ever sees origin/{default_branch}, with "
             f"no other channel back to this session's container, so it would "
             f"NOT see any of this session's archived history even though "
-            f"nothing is technically unpushed. Do NOT call create_session "
-            f"yet — either get '{branch}' merged into '{default_branch}' "
-            f"first, or tell the user plainly that this session's work is "
-            f"parked on an unmerged branch instead of silently proceeding."
+            f"nothing is technically unpushed. Do NOT call create_session yet, "
+            f"and do NOT merge '{branch}' into '{default_branch}' yourself to "
+            f"unblock it — merge timing is the user's call, same as any other "
+            f"release decision (per CLAUDE.md's Loop engineering section). "
+            f"Just tell the user plainly that this session's work is parked "
+            f"on an unmerged branch and ask whether to merge it now; if they "
+            f"say yes, merge it through the normal PR flow, not by pushing "
+            f"straight to '{default_branch}'."
         )
     else:
         push_clause = (
