@@ -87,7 +87,17 @@ is intermittently blocked for this agent (see commit_and_push's docstring):
 2. archive_latest_turn no longer silently skips tool-only turns (see its own
    docstring) — a /clear right after such a turn used to risk losing the only
    record that turn's work happened at all, since nothing new got archived.
+
+Sample schema addition (2026-08-22, later): each line in
+docs/five-hour-samples.jsonl now also carries session_id. Cross-session
+analysis previously had to guess session boundaries from where the cumulative
+total dropped (a new session's early samples are lower than the previous
+session's last one) — a heuristic that misreads a *resumed* session (one
+whose transcript already had a large prior history before this hook's first
+sample of it) as if all of that history were fresh activity. session_id lets
+analysis group samples correctly instead of guessing from the numbers alone.
 """
+
 import json
 import os
 import subprocess
@@ -279,7 +289,7 @@ def cumulative_cache_read(lines):
     return total, last_ts
 
 
-def append_cache_read_sample(lines, cwd):
+def append_cache_read_sample(lines, cwd, session_id):
     total, ts = cumulative_cache_read(lines)
     if total == 0:
         return None
@@ -287,7 +297,11 @@ def append_cache_read_sample(lines, cwd):
     sample_path = os.path.join(cwd, "docs", "five-hour-samples.jsonl")
     os.makedirs(os.path.dirname(sample_path), exist_ok=True)
     with open(sample_path, "a", encoding="utf-8") as f:
-        f.write(json.dumps({"ts": ts, "cache_read_cumulative": total}) + "\n")
+        f.write(json.dumps({
+            "ts": ts,
+            "cache_read_cumulative": total,
+            "session_id": session_id,
+        }) + "\n")
     return total
 
 
@@ -488,7 +502,7 @@ def main():
     lines = read_transcript(transcript_path)
 
     archive_latest_turn(lines, cwd)
-    total = append_cache_read_sample(lines, cwd)
+    total = append_cache_read_sample(lines, cwd, session_id)
     push_status, push_detail = commit_and_push(cwd)
     reason = maybe_notify(total, session_id, push_status, push_detail)
 

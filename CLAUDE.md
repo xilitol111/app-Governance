@@ -214,3 +214,19 @@ rigor at the lowest token cost, not the most sophisticated one.
   needs eyes.
 - Reuse file contents already read into context this session instead of
   re-reading files that haven't changed.
+
+## Usage analysis format
+
+When asked to analyze token/cost consumption (trend, "did the reduction
+measures help", session-level breakdown), source data from each project's own
+`docs/five-hour-samples.jsonl` (schema: `ts`, `cache_read_cumulative`,
+`session_id` — see `hooks/archive-turn.py`'s docstring for the schema's
+history and known caveats) rather than re-deriving it ad hoc, and structure
+the answer as: **結論(TL;DR)** → **内訳(表/グラフ)** → **このデータの限界**
+(always state what the data can't yet show — e.g. no pre-measure baseline,
+five_hour proxy ≠ the actual limit being asked about) → **次のアクション**.
+Keeping this shape consistent across asks is the point — not the specific
+content, which will always differ. Cross-project analysis requires adding
+each relevant project's repo to the session first (`add_repo` /
+`list_repos`); this governance repo's own samples only reflect governance-
+session overhead, not app-development work happening in other repos.
