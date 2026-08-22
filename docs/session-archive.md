@@ -122,3 +122,18 @@ def commit_and_push(cwd):
 - 一時的なブロックの可能性もあるため、このセッションが区切りを迎えた際に`session-end.py`(エージェントの権限判定の外で動く)が拾える範囲(`docs/`配下)は自動で解消される見込みですが、`hooks/archive-turn.py`と`NOTES-2026-08-21-handoff.md`の変更はその対象外なので、通常のgit操作が再び通るようになるまで反映されません。
 
 このStop hookの警告自体は、今のところ私からは対応不可能な状態です。
+
+---
+<!-- uuid:b523181a-881f-4792-ad5a-2e87d218c8e4 -->
+**2026-08-22T00:51:17.704Z**
+
+push成功、`main`は`origin/main`と完全に同期しました(前回の未pushコミット`05e0104`も含めて解消)。
+
+**実装完了内容:**
+- `hooks/archive-turn.py`: `commit_and_push`の「新規差分がなければpushを試みず即return」バグを修正し、`git rev-list --count HEAD --not --remotes`を真実源にpush状態(`pushed`/`unpushed`/`no_repo`/`unknown`)を毎ターン確認・返却。five時間通知はpush済み確認が取れた場合のみ`create_session`実行を承認し、未確認なら明示的に警告してブロックする文言に変更。
+- `archive_latest_turn`: ツール呼び出しのみのターンを黙ってスキップする穴を修正し、テキストがなくてもツール名のプレースホルダーを必ず記録するように変更(`/clear`直後に記録漏れが起きる問題に対応)。
+- `hooks/session-end.py`: 同じpush確認ロジックをフォールバックにも追加。
+- `CLAUDE.md`: `/clear`・`/compact`と`create_session`は前提条件が異なる(前者は緩いファイル化ルール、後者はpush確認という機械的ゲート)ことを明記。
+- `NOTES-2026-08-21-handoff.md`: 経緯と決定事項を記録。
+
+構文チェック(`py_compile`)は両hookファイルとも通過済みです。実際のフック実行(合成トランスクリプトでのtool-onlyターン記録の確認)は未実施のため、次に機会があれば検証することをお勧めします。
