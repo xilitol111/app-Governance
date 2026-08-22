@@ -8,21 +8,27 @@
 # app-Governance is a private repository, so unauthenticated curl to the raw
 # CDN always 404s (confirmed 2026-08-21 — even for nonexistent paths, the
 # signature of a private repo). git operations against github.com work
-# because the environment's outbound proxy authenticates git's smart-HTTP
-# protocol transparently (the same mechanism that makes `git push` work in
-# every session) — curl to a different host/path pattern doesn't get that
-# injection.
+# IF AND ONLY IF the current session's environment has app-Governance in its
+# authorized repo scope — the outbound proxy injects git-smart-HTTP
+# credentials per repo, not globally. Confirmed 2026-08-22: a session running
+# in an environment scoped only to a different repo (e.g. xilitol111/game)
+# gets a bare `fatal: could not read Username` here, every single session,
+# with no other symptom — which is exactly why this block's success/failure
+# is echoed below instead of silenced. If you see "Governance sync: FAILED"
+# on session start, this environment needs app-Governance added to its
+# authorized repo scope (or the repo needs another distribution path that
+# doesn't depend on git auth, e.g. making it public).
 set -uo pipefail
 
 GOV_REPO="https://github.com/xilitol111/app-Governance"
 GOV_CLONE="$HOME/.claude/governance-src"
 
 if [ -d "$GOV_CLONE/.git" ]; then
-  git -C "$GOV_CLONE" fetch --quiet origin main 2>/dev/null \
-    && git -C "$GOV_CLONE" reset --quiet --hard origin/main 2>/dev/null
+  GOV_SYNC_ERR=$( { git -C "$GOV_CLONE" fetch --quiet origin main \
+    && git -C "$GOV_CLONE" reset --quiet --hard origin/main; } 2>&1 )
 else
   rm -rf "$GOV_CLONE"
-  git clone --quiet --depth 1 --branch main "$GOV_REPO" "$GOV_CLONE" 2>/dev/null
+  GOV_SYNC_ERR=$(git clone --quiet --depth 1 --branch main "$GOV_REPO" "$GOV_CLONE" 2>&1)
 fi
 
 if [ -d "$GOV_CLONE" ] && [ -f "$GOV_CLONE/CLAUDE.md" ]; then
@@ -34,7 +40,18 @@ if [ -d "$GOV_CLONE" ] && [ -f "$GOV_CLONE/CLAUDE.md" ]; then
       chmod +x ~/.claude/hooks/"$f"
     fi
   done
+  echo "## Governance sync: OK ($(git -C "$GOV_CLONE" log -1 --format='%h %s' 2>/dev/null))"
+else
+  echo "## Governance sync: FAILED"
+  echo "~/.claude/CLAUDE.md and hooks were NOT updated this session — whatever"
+  echo "was already there (possibly stale, possibly empty placeholder files) is"
+  echo "still in effect. This environment likely lacks git access to"
+  echo "app-Governance; see the comment above this block for the fix."
+  if [ -n "${GOV_SYNC_ERR:-}" ]; then
+    echo "git error: $GOV_SYNC_ERR"
+  fi
 fi
+echo
 
 # Cheap, zero-LLM-cost continuity: surface recent git history of the CURRENT
 # project (not the governance repo) so a new session has a hint of what

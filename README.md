@@ -157,3 +157,14 @@ Claude Code運用ガイドラインの原本(source of truth)を管理するリ�
 
 この仕組みは`kakeibo`環境専用。ローカルPCや別のClaude Code環境でも同じ内容を効かせたい場合は、
 それぞれの環境で同じSetup Script(またはそれに相当する初期化手順)を個別に設定する必要がある。
+
+**Setup Scriptを登録するだけでは不十分。** `session-start.sh`内の`git clone`/`git fetch`が
+成功するには、その環境(セッション)自身がapp-Governanceへのgitアクセス権限(リポジトリスコープ)
+を持っている必要がある。2026-08-22、`xilitol111/game`用の別環境で実際に検証したところ、
+Setup Script自体は正しく登録されていた(`session-start.sh`は実体あり、settings.jsonのフック
+登録も正常)にもかかわらず、その環境のGitHubアクセスが`xilitol111/game`のみにスコープされて
+おり`app-Governance`が対象外だったため、`git clone`が`fatal: could not read Username`で
+**毎セッション無音のまま失敗し続けていた**(`2>/dev/null`で握りつぶされていたため気づけな
+かった)。現在は失敗時に`## Governance sync: FAILED`とエラー内容をセッション開始時の出力に
+必ず表示するよう`session-start.sh`を修正済み(この行が出たら、その環境にapp-Governanceへの
+リポジトリアクセスを追加するか、非git経由の配布方式に切り替える必要がある)。
