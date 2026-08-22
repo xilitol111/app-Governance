@@ -21,6 +21,24 @@ re-deriving or re-loading things unnecessarily.
   wins — this document exists to cut waste, not to justify cutting
   corners.
 
+## Response language
+
+- Default to Japanese for anything the user actually reads as this
+  turn's answer — the final end-of-turn summary, direct replies to a
+  question, and any other user-facing text block. This user
+  communicates in Japanese; match it.
+- To cut token cost, intermediate text produced along the way (brief
+  mid-task progress updates, subagent prompts/reports, tool call
+  descriptions, PR/commit text, scratch notes) may be written in
+  English when that's cheaper to produce — English is generally more
+  token-efficient per unit of information than Japanese. The one hard
+  requirement: every turn must still close with a Japanese-language
+  summary of what happened and what's next, per the base system
+  prompt's "End-of-turn summary" rule. Never let a turn end without
+  that Japanese wrap-up, even if everything before it was in English.
+- This doesn't relax the base system prompt's tone/brevity rules — it
+  only decides which language satisfies them.
+
 ## Project CLAUDE.md hygiene
 
 - Keep a project's `CLAUDE.md` as **current-state reference only**:
