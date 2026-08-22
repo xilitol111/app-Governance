@@ -214,3 +214,18 @@ rigor at the lowest token cost, not the most sophisticated one.
   needs eyes.
 - Reuse file contents already read into context this session instead of
   re-reading files that haven't changed.
+- Don't run the default hourly PR check-in loop when it structurally can't
+  find anything. That polling cadence is calibrated for an external human
+  reviewer who might respond hours or days later — it's the wrong tool
+  when there's no CI (confirm via `get_check_runs` once, right after
+  creating/subscribing to the PR — 0 check runs means nothing will ever
+  report) and the approving reviewer is the same person already in this
+  conversation, since their decision arrives as a message here, not as
+  GitHub activity a poll could detect. In that case, skip scheduling
+  repeat check-ins entirely and just wait for the user's next message —
+  keep the initial `subscribe_pr_activity` in place (harmless, and still
+  catches a genuinely unexpected external comment or CI addition), but
+  don't burn turns re-confirming "still nothing" on a timer. Found live
+  2026-08-22: six hourly check-ins on this repo's own PR #4 (no CI, the
+  user being the reviewer) each reported no change, right up until the
+  user merged it directly on GitHub.
