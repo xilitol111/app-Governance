@@ -74,9 +74,14 @@ re-deriving or re-loading things unnecessarily.
   this session that matters already been written to a durable file, per
   the commit-discipline bullet below). `create_session`'s precondition is
   mechanical and stricter: the current project repo's `docs/session-
-  archive.md` must be confirmed *pushed* to origin, not just committed,
-  since a brand-new session only ever sees `origin/main` with no other
-  channel back to this session's container. A `/clear`-safe moment is not
+  archive.md` must be confirmed pushed to origin *and reachable from the
+  repo's actual default branch* — not just pushed to some branch, since a
+  brand-new session only ever sees `origin/<default>` with no other channel
+  back to this session's container. Being pushed to an unmerged feature
+  branch satisfies neither "committed" nor "safe" (`archive-turn.py`'s
+  `commit_and_push` reports this distinctly as `"pushed_off_default"`,
+  2026-08-22 — found live in this repo's own governance session, sitting on
+  a feature branch the whole time). A `/clear`-safe moment is not
   automatically a `create_session`-safe moment.
 - No tool lets Claude run `/clear` or `/compact` on the user's behalf or
   pre-fill their input — either can only be suggested, and the user
@@ -90,6 +95,20 @@ re-deriving or re-loading things unnecessarily.
   `` `/compact` ``), since Claude still can't run it for them — most
   clients render inline/fenced code with a one-tap copy affordance, so
   they can act on it without retyping.
+- **Standard post-`/clear`/`/compact` handoff — don't re-derive it, follow
+  this every time:** `session-start.sh` already injects, at zero LLM cost,
+  the current project's recent git log, latest commit message, git status,
+  and a bounded tail of `docs/session-archive.md` (plus, since 2026-08-22,
+  a stale-`CLAUDE.md` notice when relevant). Treat that injected block as
+  the complete handoff and resume directly from whatever its last entries
+  describe as still open — don't ask the user to re-explain, and don't
+  re-read `docs/session-archive.md` in full or dig into `docs/plans/`/
+  `docs/DEVLOG.md` unless the injected tail doesn't cover what's actually
+  needed. If anything was being actively tracked before the clear (a PR
+  subscription, a scheduled check-in), re-establish it explicitly rather
+  than assuming it survived — `subscribe_pr_activity` and scheduling calls
+  are idempotent, so just re-arm them. Only fall back to asking the user a
+  clarifying question if the injected tail ends without a clear next step.
 - Commit meaningful progress at natural checkpoints, not only when a
   session feels "done." Sessions can end unexpectedly (container
   reclaimed, connection drop); uncommitted work does not survive to the
