@@ -104,11 +104,12 @@ re-deriving or re-loading things unnecessarily.
   describe as still open — don't ask the user to re-explain, and don't
   re-read `docs/session-archive.md` in full or dig into `docs/plans/`/
   `docs/DEVLOG.md` unless the injected tail doesn't cover what's actually
-  needed. If anything was being actively tracked before the clear (a PR
-  subscription, a scheduled check-in), re-establish it explicitly rather
-  than assuming it survived — `subscribe_pr_activity` and scheduling calls
-  are idempotent, so just re-arm them. Only fall back to asking the user a
-  clarifying question if the injected tail ends without a clear next step.
+  needed. If a PR subscription was active before the clear, re-establish
+  only the webhook subscription itself (`subscribe_pr_activity` is
+  idempotent) — see "PR activity monitoring" below for why a scheduled
+  polling check-in is *not* something to re-arm alongside it. Only fall
+  back to asking the user a clarifying question if the injected tail ends
+  without a clear next step.
 - Commit meaningful progress at natural checkpoints, not only when a
   session feels "done." Sessions can end unexpectedly (container
   reclaimed, connection drop); uncommitted work does not survive to the
@@ -133,6 +134,30 @@ re-deriving or re-loading things unnecessarily.
   what's still open here and hand them the new session's link; keep
   working here if they keep talking instead of moving. Don't wait for the
   user to suggest the switch themselves.
+
+## PR activity monitoring
+
+This overrides the harness's built-in default of scheduling a `send_later`
+self check-in roughly an hour out whenever a PR gets subscribed
+(`subscribe_pr_activity`). That default exists to catch webhook events
+that might not arrive reliably, but in practice it degenerates into
+repeated no-op turns: a quiet PR is far more often "the user hasn't
+decided whether to merge yet" than "an event got dropped," and polling
+cannot detect the former — see `docs/session-archive.md`, 2026-08-22, PR
+#4, five to six consecutive hourly check-ins that all found nothing
+because the blocker was a pending human decision, not GitHub activity.
+
+- Do not schedule automatic hourly (or any interval) self check-ins to
+  poll a subscribed PR's state "just in case." Rely on
+  `subscribe_pr_activity` webhook events as the primary and normally only
+  signal.
+- After a `/clear`/`/compact` or in a fresh session, re-establish only the
+  webhook subscription itself if one was active — never also re-arm a
+  polling loop alongside it.
+- If a specific PR genuinely needs a one-off time-based check (e.g.
+  waiting on a long CI run with no webhook coverage for it), say so
+  explicitly and schedule that single check — not an open-ended recurring
+  loop — and stop once the reason for it no longer holds.
 
 ## Loop engineering (autonomous fix/verify cycles)
 
