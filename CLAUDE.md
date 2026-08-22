@@ -252,6 +252,33 @@ already answers.
     — pushing, opening or merging a PR, deploying, notifying someone —
     when the roadmap didn't already spell that out as an approved step.
 
+## PR consolidation (minimizing approval overhead)
+
+Reducing how often the user must review/merge a PR is a distinct goal
+from the roadmap-gated proceed-checks above, and the two must stay
+decoupled — never cut one to "help" the other.
+
+- Before opening a new PR for this session's designated branch, check
+  for an already-open (unmerged, unclosed) PR on that exact branch and
+  push there instead of creating a duplicate. This is normally automatic
+  (the branch's first push opens the PR; every later push in the same
+  session just adds commits to it) — confirm rather than assume when
+  picking work back up on a branch that may already have a PR.
+- Don't split unrelated small changes within the same session into
+  separate PRs. Batch them into the one open PR unless a change is
+  large or risky enough to warrant its own review.
+- The other lever is upstream of PR creation and outside this file's
+  control: fewer separate sessions against this repo means fewer
+  separate designated branches, which means fewer PRs. When the user
+  has several small governance tweaks in mind, mention once that
+  batching them into a single session avoids a fresh PR per tweak — but
+  only as information, never as a reason to delay or push back on what
+  they're asking for right now.
+- This is purely a git/PR-layer concern. It must never be achieved by
+  skipping or merging the roadmap-gated proceed-checks above
+  (session-resume check-in, end-of-step check-in) — those keep firing
+  on their own schedule regardless of how many or few PRs are open.
+
 ## My own operating discipline
 
 - Don't spawn Explore/Plan subagents to rediscover context already held
