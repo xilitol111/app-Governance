@@ -8,7 +8,12 @@ Three jobs:
 
 1. Append the latest assistant turn's text (or, if the turn was tool-only,
    a tool-name placeholder — see archive_latest_turn's docstring) to
-   docs/session-archive.md.
+   docs/session-archive.md, plus the most recent TaskList result found
+   anywhere in the transcript (see latest_task_list_snapshot's docstring —
+   added 2026-08-22 because there's no reliable way to know in advance
+   which turn will be the last one before a manual /clear, so structured
+   task state has to be re-attached to every turn's entry, not just a
+   specially-written "final" one).
 2. Append a timestamped (cumulative cache_read_input_tokens) sample to
    docs/five-hour-samples.jsonl, and — once per session, via a decision:"block"
    reason Claude actually sees — nudge toward wrapping up once cumulative cache
@@ -102,6 +107,78 @@ def read_transcript(transcript_path):
         return f.readlines()
 
 
+def latest_task_list_snapshot(lines):
+    """Find the most recent TaskList call's result anywhere in the transcript
+    (not just this turn), so the archive captures actual task state whenever
+    Claude has checked it — independent of whether any prose mentions it, and
+    independent of which turn ends up being the session's last before a
+    manual /clear (there is no reliable way to predict that in advance, so
+    the fix is to make every turn's entry carry the latest known snapshot
+    rather than relying on one specially-written "final" turn). Returns None
+    if TaskList was never called this session — this is a supplement to the
+    prose archive, not a requirement to use the task tools at all.
+    """
+    tool_use_id = None
+    for line in reversed(lines):
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            obj = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if obj.get("type") != "assistant":
+            continue
+        content = (obj.get("message") or {}).get("content") or []
+        for b in content:
+            if (
+                isinstance(b, dict)
+                and b.get("type") == "tool_use"
+                and b.get("name") == "TaskList"
+            ):
+                tool_use_id = b.get("id")
+                break
+        if tool_use_id:
+            break
+
+    if not tool_use_id:
+        return None
+
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            obj = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if obj.get("type") != "user":
+            continue
+        content = (obj.get("message") or {}).get("content") or []
+        for b in content:
+            if not (
+                isinstance(b, dict)
+                and b.get("type") == "tool_result"
+                and b.get("tool_use_id") == tool_use_id
+            ):
+                continue
+            result = b.get("content")
+            if isinstance(result, list):
+                texts = [
+                    c.get("text", "")
+                    for c in result
+                    if isinstance(c, dict) and c.get("type") == "text"
+                ]
+                text = "\n".join(t for t in texts if t)
+            elif isinstance(result, str):
+                text = result
+            else:
+                text = ""
+            # Bounded so a huge task list can't blow up the archive entry.
+            return text[:2000] if text else None
+    return None
+
+
 def archive_latest_turn(lines, cwd):
     # Take the single most recent assistant entry, text or not (2026-08-22 fix).
     # The old version scanned backward for the first *text-bearing* assistant
@@ -160,6 +237,10 @@ def archive_latest_turn(lines, cwd):
         body = f"_(tool-only turn: {', '.join(tool_names)})_"
     else:
         return  # nothing meaningful on this entry (shouldn't normally happen)
+
+    task_snapshot = latest_task_list_snapshot(lines)
+    if task_snapshot:
+        body += f"\n\n<details><summary>Task list (as of this turn)</summary>\n\n{task_snapshot}\n\n</details>"
 
     with open(log_path, "a", encoding="utf-8") as f:
         f.write(f"\n---\n{marker}\n**{last_ts}**\n\n{body}\n")
