@@ -21,6 +21,24 @@ re-deriving or re-loading things unnecessarily.
   wins — this document exists to cut waste, not to justify cutting
   corners.
 
+## Response language
+
+- Default to Japanese for anything the user actually reads as this
+  turn's answer — the final end-of-turn summary, direct replies to a
+  question, and any other user-facing text block. This user
+  communicates in Japanese; match it.
+- To cut token cost, intermediate text produced along the way (brief
+  mid-task progress updates, subagent prompts/reports, tool call
+  descriptions, PR/commit text, scratch notes) may be written in
+  English when that's cheaper to produce — English is generally more
+  token-efficient per unit of information than Japanese. The one hard
+  requirement: every turn must still close with a Japanese-language
+  summary of what happened and what's next, per the base system
+  prompt's "End-of-turn summary" rule. Never let a turn end without
+  that Japanese wrap-up, even if everything before it was in English.
+- This doesn't relax the base system prompt's tone/brevity rules — it
+  only decides which language satisfies them.
+
 ## Project CLAUDE.md hygiene
 
 - Keep a project's `CLAUDE.md` as **current-state reference only**:
@@ -190,12 +208,76 @@ rigor at the lowest token cost, not the most sophisticated one.
   the fact: a design doc reviewed for two minutes before code exists is
   cheaper than several loop iterations spent fixing a correct
   implementation of a wrong design.
-- Keep three checkpoints human-owned no matter how automated the rest of
-  the loop is: reviewing the design doc before implementation starts,
-  deciding where to cut a long task into stopping points, and deciding
-  when to actually ship. None of these are things a linter or an LLM
-  verifier can substitute for, and none of them cost anything against the
-  usage window — they're the user's calls, not extra model turns.
+- Keep the roadmap-approval gate human-owned no matter how automated the
+  rest of the loop is — see "Roadmap-gated autonomous execution" below
+  for exactly when to check in and when to stop and raise a real
+  question instead.
+
+## Roadmap-gated autonomous execution
+
+For any non-trivial task, produce the roadmap first — concrete steps from
+requirements through design, implementation, and test to done — and get
+it approved before starting execution. Once approved, that roadmap is
+the standing authorization to keep going: don't re-ask "what should I do
+next" mid-task, and don't ask open-ended direction questions the roadmap
+already answers.
+
+- Write the roadmap as a durable file (e.g. `docs/plans/<task>.md`) so it
+  survives a `/clear`, a `/compact`, or a session switch — per Session
+  scoping above, that's the handoff mechanism, not conversation memory.
+- After approval, ask for permission to proceed — never for direction —
+  at exactly two points: (a) on resuming work (after `/clear`/`/compact`,
+  a new `create_session`, or any other session boundary), and (b) right
+  after finishing the step/task currently in front of you. At both
+  points: reload the roadmap file, state which step is next in one line,
+  and ask only "proceed with this step?" — not "what should I do now?".
+  Between those two points, execute without asking.
+- Update the roadmap file in place as steps complete or the plan changes,
+  so each check-in reads the file's current state rather than
+  reconstructing progress from conversation memory.
+
+**Exceptions — stop and raise the actual issue, not just a proceed-check, when:**
+  - The step needs a destructive or hard-to-reverse action the approved
+    roadmap didn't already call out (force-push, `git reset --hard`,
+    `rm -rf`, dropping/altering shared data, discarding uncommitted
+    work).
+  - A design decision or fork in the road comes up that the roadmap
+    didn't anticipate (an assumption turns out wrong, two valid
+    approaches diverge, a dependency needs to change).
+  - The work needs to expand beyond what was approved (a new requirement
+    surfaces, a fix needs files/areas outside the roadmap's scope).
+  - A step fails repeatedly with no fix obviously inside the approved
+    plan (see the two-consecutive-failures rule above).
+  - The action reaches outside the local repo into shared/external state
+    — pushing, opening or merging a PR, deploying, notifying someone —
+    when the roadmap didn't already spell that out as an approved step.
+
+## PR consolidation (minimizing approval overhead)
+
+Reducing how often the user must review/merge a PR is a distinct goal
+from the roadmap-gated proceed-checks above, and the two must stay
+decoupled — never cut one to "help" the other.
+
+- Before opening a new PR for this session's designated branch, check
+  for an already-open (unmerged, unclosed) PR on that exact branch and
+  push there instead of creating a duplicate. This is normally automatic
+  (the branch's first push opens the PR; every later push in the same
+  session just adds commits to it) — confirm rather than assume when
+  picking work back up on a branch that may already have a PR.
+- Don't split unrelated small changes within the same session into
+  separate PRs. Batch them into the one open PR unless a change is
+  large or risky enough to warrant its own review.
+- The other lever is upstream of PR creation and outside this file's
+  control: fewer separate sessions against this repo means fewer
+  separate designated branches, which means fewer PRs. When the user
+  has several small governance tweaks in mind, mention once that
+  batching them into a single session avoids a fresh PR per tweak — but
+  only as information, never as a reason to delay or push back on what
+  they're asking for right now.
+- This is purely a git/PR-layer concern. It must never be achieved by
+  skipping or merging the roadmap-gated proceed-checks above
+  (session-resume check-in, end-of-step check-in) — those keep firing
+  on their own schedule regardless of how many or few PRs are open.
 
 ## My own operating discipline
 
