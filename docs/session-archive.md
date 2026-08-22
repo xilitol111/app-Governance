@@ -626,3 +626,9 @@ CI設定なし・変化はありませんでした(購読確認の重複通知�
 修正として、`commit_and_push`に`git merge-base --is-ancestor`によるデフォルトブランチ到達性チェックを追加し、「pushedだがデフォルトブランチにはまだ届いていない」状態を`pushed_off_default`として明確に区別、five時間通知はこれを「未pushと同様、create_session禁止」として扱うようにしました。実際のgitリポジトリ(main上のコミット/featureブランチ上のコミットの2パターン)で動作確認済みです。
 
 3つの変更は[PR #4](https://github.com/xilitol111/app-Governance/pull/4)にまとめて反映されています。マージしますか?
+
+---
+<!-- uuid:7e4ccfae-2b33-4e94-bed5-b981f6bf9906 -->
+**2026-08-22T07:36:45.440Z**
+
+PR #4は`mergeable_state: clean`で変化なし、CI・コメントもありません。次のcheck-inを1時間後に再設定しました。マージのご判断をお待ちしています。
