@@ -41,11 +41,16 @@ re-deriving or re-loading things unnecessarily.
   keep accumulating in the cached context — durable plan/spec files (not
   conversation memory) already carry any continuity that matters, so
   `/clear` loses nothing worth keeping. Reserve `/compact` for continuing
-  the *same* line of work once the transcript has simply grown long. This is
-  a different lever from the five-hour-limit `create_session` policy below:
-  `/clear` addresses topic-locality within one session (free, instant,
-  user-run), `create_session` addresses the account-wide usage-window limit
-  — apply whichever is actually relevant, and both where both apply.
+  the *same* line of work once the transcript has simply grown long.
+  Treat this and the five-hour-limit `create_session` policy below as one
+  escalation ladder, not two independent policies: both exist to reset the
+  marginal cache-read cost of future turns, `/clear`/`/compact` being the
+  free, instant, in-place rung and `create_session` the heavier one. Check
+  the cheap rung first at every natural boundary; only escalate to
+  `create_session` when the work is one continuous, unclearable task that
+  still needs its full live context and has crossed the usage-window
+  threshold — `/clear`/`/compact` can't help there since dropping or
+  summarizing the context would lose what the task still needs.
 - No tool lets Claude run `/clear` or `/compact` on the user's behalf or
   pre-fill their input — either can only be suggested, and the user
   prefers this framed as an explicit choice rather than buried in prose.
