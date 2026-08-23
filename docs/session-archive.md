@@ -1232,3 +1232,49 @@ GAME#7のCIはグリーン(build+lint成功)でした。両PRともclean/mergeab
 **2026-08-23T12:59:58.913Z**
 
 app-Governance#9はドラフト解除され、レビュー可能な状態になりました(CI設定なしのためチェックは無し、mergeable_stateもclean)。特に対応が必要な事項はないので、そのまま監視を継続します。
+
+---
+<!-- uuid:1b5f123d-5b4b-4db8-a00f-a71fbb7320ff -->
+**2026-08-23T13:17:25.187Z**
+
+app-Governance#9(Phase 1調査結果ドキュメント)がマージされました。このPRは自動的に監視終了となっています。
+
+現状: GAME#7(CI追加)はまだオープンで監視継続中、CI green・レビュー待ちの状態です。特に追加対応は不要なので、このまま見守りを続けます。
+
+---
+<!-- uuid:7787bad2-89f8-44a7-a1e4-5d0729ce8ccb -->
+**2026-08-23T13:17:33.525Z**
+
+GAME#7がドラフト解除され、レビュー可能な状態になりました。CIは既にgreen(build+lint成功)、mergeableで、現時点で追加対応が必要な事項はありません。このまま監視を継続します。
+
+---
+<!-- uuid:87024bd9-3746-48a6-8520-5f4f45885251 -->
+**2026-08-23T13:17:43.975Z**
+
+GAME#7がマージされました。GAMEにbuild+lintのCIが導入され、監視対象の2件(app-Governance#9、GAME#7)ともマージ完了です。
+
+現状のまとめ:
+- **GAME**: `.github/workflows/ci.yml`(build+lint)導入・マージ済み。ただし自動テスト(ランダムプレイアウト/Playwrightスモーク)は未コミットのため、CIはまだbuild+lintのみをカバー
+- **kakeibo / kakeibo-liff**: npmベースのCIアプローチに合わず対象外(前回確認済み)
+- 積み残しは`docs/plans/token-consumption-followups.md`のitem 1b(GAMEのテストスイート未コミット問題)
+
+次に進めるとすれば、GAMEのテストスイート(build/lintの先にある実テスト)をCIに組み込む作業になりますが、今回はここで一区切りとします。何か指示があれば続けます。
+
+---
+<!-- uuid:023b2653-d0fc-4106-bd8a-3a67e737767a -->
+**2026-08-23T13:19:52.840Z**
+
+Opened draft PR [#10](https://github.com/xilitol111/app-Governance/pull/10) and I'm watching it.
+
+Summary of what got done this turn:
+- Confirmed GAME#7 (CI build+lint) and app-Governance#9 (Phase 1 findings) are both merged.
+- Implemented item 2 from `docs/plans/token-consumption-followups.md`: `hooks/archive-turn.py` now detects a successful PR merge in the transcript and fires a one-time `/clear`/`/compact` nudge, mirroring the five-hour interval mechanism. Unit-verified with synthetic transcripts (dedup + error suppression both check out).
+- Updated the followups doc (items 1 and 2 now marked done) and pushed everything.
+
+Remaining open items in the followups doc: 1b (commit an actual GAME test suite), 3 (split kakeibo's CLAUDE.md), 4, 5, 6 — let me know if you want me to keep going on one of those next.
+
+---
+<!-- uuid:75aa4b26-91bc-4732-a65f-4b19f04837c8 -->
+**2026-08-23T13:20:08.379Z**
+
+PR #10 has no actionable activity yet (just subscription confirmations, and this repo has no CI). I've scheduled a check-in in an hour and will keep watching quietly.

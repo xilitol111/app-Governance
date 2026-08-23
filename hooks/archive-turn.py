@@ -96,6 +96,25 @@ session's last one) — a heuristic that misreads a *resumed* session (one
 whose transcript already had a large prior history before this hook's first
 sample of it) as if all of that history were fresh activity. session_id lets
 analysis group samples correctly instead of guessing from the numbers alone.
+
+PR-merge-boundary nudge (2026-08-23, item 2 of
+docs/plans/token-consumption-followups.md): the single largest token segment
+found in the 2026-08-22 investigation (2.42億 tokens, 38% of that day's GAME
+total) was root-caused to a session running straight through a PR merge into
+its next batch of work with no `/clear`. CLAUDE.md's "Session scoping"
+section already calls a PR merge a natural `/clear` boundary, but that's
+prose the agent doesn't always act on in practice — same category of problem
+the five-hour interval nudge above was built to solve. So: detect a
+successful `mcp__github__merge_pull_request` tool call anywhere in the
+transcript, and once per distinct merge (deduped by that tool_use's id via a
+per-session marker file, same pattern as `maybe_notify`), surface a
+`decision:"block"` reason on the next Stop hook suggesting `/clear`/`/compact`
+via AskUserQuestion — mirroring the interval mechanism's wording rather than
+inventing a second convention. Scoped to the MCP tool specifically (not e.g.
+a bash `gh pr merge`) since that's the documented, enforced path for this
+account's GitHub operations. If both this and the five-hour interval nudge
+fire on the same turn, their reasons are concatenated into one block message
+— Stop hooks only get one `reason` field per invocation.
 """
 
 import json
@@ -393,6 +412,110 @@ def maybe_notify(total, session_id, push_status, push_detail):
     )
 
 
+MERGE_TOOL_NAME = "mcp__github__merge_pull_request"
+
+
+def find_last_successful_merge(lines):
+    """Return the tool_use id of the most recent successful
+    mcp__github__merge_pull_request call in the transcript, or None.
+
+    "Successful" means a matching tool_result exists and isn't flagged as an
+    error — a failed/rejected merge attempt shouldn't trip the nudge, since no
+    actual merge boundary happened.
+    """
+    tool_use_id = None
+    for line in reversed(lines):
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            obj = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if obj.get("type") != "assistant":
+            continue
+        content = (obj.get("message") or {}).get("content") or []
+        for b in content:
+            if (
+                isinstance(b, dict)
+                and b.get("type") == "tool_use"
+                and b.get("name") == MERGE_TOOL_NAME
+            ):
+                tool_use_id = b.get("id")
+                break
+        if tool_use_id:
+            break
+
+    if not tool_use_id:
+        return None
+
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            obj = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if obj.get("type") != "user":
+            continue
+        content = (obj.get("message") or {}).get("content") or []
+        for b in content:
+            if not (
+                isinstance(b, dict)
+                and b.get("type") == "tool_result"
+                and b.get("tool_use_id") == tool_use_id
+            ):
+                continue
+            if b.get("is_error"):
+                return None
+            return tool_use_id
+    return None
+
+
+def maybe_notify_pr_merge(lines, session_id):
+    if not NOTIFY_ENABLED:
+        return None
+
+    merge_id = find_last_successful_merge(lines)
+    if not merge_id:
+        return None
+
+    marker_path = f"/tmp/.pr-merge-notified-{session_id}"
+    last_notified = None
+    if os.path.exists(marker_path):
+        try:
+            with open(marker_path) as f:
+                last_notified = (f.read() or "").strip() or None
+        except OSError:
+            last_notified = None
+
+    if merge_id == last_notified:
+        return None  # already nudged for this specific merge
+
+    try:
+        with open(marker_path, "w") as f:
+            f.write(merge_id)
+    except OSError:
+        pass
+
+    return (
+        f"[System note, not from the user: this session just merged a pull "
+        f"request (mcp__github__merge_pull_request). Per governance policy "
+        f"in CLAUDE.md's Session scoping section, a PR merge is a natural "
+        f"session boundary — the largest single token-waste segment found in "
+        f"the 2026-08-22 usage investigation was a session that ran straight "
+        f"through a merge into its next batch of work with no `/clear`. If "
+        f"the next thing you'd do is a new, unrelated task, suggest `/clear` "
+        f"via AskUserQuestion now (or `/compact` if it's really a continuation "
+        f"of the same task that just happens to run long) rather than just "
+        f"continuing on quietly. If you're actively mid-task right now (e.g. "
+        f"still watching this same PR, or doing follow-up the merge directly "
+        f"required), it's fine to finish that first — this is a one-time "
+        f"nudge for this merge, not a recurring block.]"
+    )
+
+
 def commit_and_push(cwd):
     """Commit any new archive content, then always check/attempt push and
     report whether HEAD ends up fully synced with some remote-tracking ref
@@ -504,7 +627,10 @@ def main():
     archive_latest_turn(lines, cwd)
     total = append_cache_read_sample(lines, cwd, session_id)
     push_status, push_detail = commit_and_push(cwd)
-    reason = maybe_notify(total, session_id, push_status, push_detail)
+    interval_reason = maybe_notify(total, session_id, push_status, push_detail)
+    merge_reason = maybe_notify_pr_merge(lines, session_id)
+
+    reason = "\n\n".join(r for r in (interval_reason, merge_reason) if r) or None
 
     if reason:
         print(json.dumps({
