@@ -59,16 +59,14 @@ actually needed.
    (dedup + error-case suppression both confirmed) — not yet observed live
    against a real merge in this session.
 
-3. [ ] **Actually split kakeibo's CLAUDE.md** **(needs app-repo write access)**
-   kakeibo's `CLAUDE.md` is 1,889 lines / 203,913 bytes; only the first ~131
-   lines are current-state reference, the remaining ~93% is a dated
-   changelog (2026-08-06 through 2026-08-16 entries) that should live in a
-   separate `docs/DEVLOG.md` per this repo's own hygiene rule. This is the
-   exact anti-pattern GAME was earlier (incorrectly) recorded as having
-   already fixed — GAME's CLAUDE.md is actually fine (250 lines, current-
-   state only); kakeibo is the one that's actually bloated and unaddressed.
-   Rough estimate: cuts kakeibo's per-turn fixed system-prompt cost by an
-   order of magnitude. Mechanical, low-risk, high impact.
+3. [x] **Actually split kakeibo's CLAUDE.md** — PR opened 2026-08-23:
+   https://github.com/xilitol111/kakeibo/pull/7
+   `CLAUDE.md` was 1,922 lines / 206,941 bytes (grew slightly since this
+   item was first scoped); only the first ~131 lines were current-state
+   reference, the rest was a dated changelog moved verbatim (content-loss
+   verified via `diff`) into `docs/DEVLOG.md`. New `CLAUDE.md` is 143
+   lines — cuts kakeibo's per-turn fixed system-prompt cost by roughly an
+   order of magnitude. Awaiting review/merge.
 
 4. [ ] **Pre-emptively split GAME's own CLAUDE.md before it bloats**
    Not urgent yet (still lean), but the "Known simplifications" section is
