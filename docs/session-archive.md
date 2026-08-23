@@ -908,3 +908,327 @@ GAMEには現状CIが無く、「build/lint/tsc + ランダムプレイアウト
 - 6項目を優先度順に記載(CI移行・PRマージ境界での`/clear`コード化・kakeibo CLAUDE.md分割・GAME CLAUDE.mdの先手ケア・kakeibo側hookの動作確認・セグメント4アーティファクトの再検証)
 - GAME/kakeiboへの書き込みが必要な項目には明示的にマーク済み
 - 次回新規セッションは`git log`の直近コミット一覧からこのファイルの存在に気づけ、既存の分析(Artifact・session-archive.md)を再導出せずにこのファイルだけ読めば作業に入れる形にしてあります
+
+---
+<!-- uuid:0a059db5-a037-4c73-8984-8a5cf6932203 -->
+**2026-08-23T09:07:08.657Z**
+
+# 設計批評:AI自律開発システム(Claude Code オーケストレーター + Qwen2.5-Coder-14B ローカル実装)
+
+## 抽出できた設計の要点
+
+- **3層構造**:①スマホ/Claude.aiでの指示受付 → ②自宅PCのClaude Codeが要件をJSON設計書に変換(コード出力禁止) → ③RTX3080上のQwen2.5-Coder-14B(Ollama)が設計書から純粋なコードのみ生成、ローカルテスト後GitHubへpush
+- **ブリッジ**: `github_local_bridge.py` がGit操作・Ollama API呼び出し・ローカル検証・pushを仲介
+- **リソース制約**: `OLLAMA_NUM_PARALLEL=1`, `OLLAMA_CONTEXT_LENGTH=8192`
+- **マルチセッション**: tmuxで複数プロジェクトを多重化、Ollama側でキューイング
+- **安全策**: リトライ上限3回、Claudeへの戻り値は「ログとステータスのみ」でAPIコスト削減
+
+全体設計思想(設計と実装の分離、トークン節約のためログのみ返す)は、このリポジトリ自身が採用している運用哲学と方向性が近く、筋は良いです。ただし実現可能性の面でいくつか無視できない懸念があります。
+
+## 実現可能性上の懸念
+
+1. **VRAM不足がほぼ確実** — Qwen2.5-Coder-14Bはfp16で約28GB要ります。RTX3080(10〜12GB)で動かすには4bit量子化(Q4_K_M等)必須で、これは設計書に明記されていません。量子化を前提にするなら、コード生成品質(特に複雑なロジック・型整合性)がかなり劣化する前提で設計する必要があります。
+2. **コンテキスト長8192トークンは実用には狭い** — 設計JSON+既存ファイル内容+指示文を渡すと、中規模ファイルの改修だけで簡単に超えます。超過時にOllamaが黙って古い文脈を切り捨てる挙動があり、「なぜか的外れなコードが出る」原因になりやすいです。
+3. **「コードのみ出力」指示への追従性** — 14B級モデルは厳格なフォーマット制約(説明・Markdown一切なし)を安定して守れないことが多く、パース失敗が頻発しがちです。リトライ3回はあっても、失敗の判定基準(構文チェック?テスト実行?)が設計書から読み取れません。
+4. **無人pushのリスクが最大の穴** — 「ローカルテスト検証後にGitHubへpush」とありますが、人間のレビューやCIゲートの記載が見当たりません。ローカルテストだけでは、セキュリティ上の欠陥や設計意図とのズレは検出できません。誤った/危険なコードがそのままリモートに乗る経路になり得ます。
+5. **「マルチセッション並行」は実質は並行ではない** — tmuxは単なるプロセス多重化で、GPU側は`NUM_PARALLEL=1`により結局シリアル処理です。フロントエンド/バックエンドを「同時に」進めているように見えて、実際は待ち行列で片方が待たされる。設計書はこれを前提として書かれているように見えますが、明記されていないと後で「なぜ遅い」と混乱の元になります。
+6. **ログのみ返却でClaude側のレビューが空洞化** — コスト削減の意図は良いですが、Claudeが生成コードの中身を一切見ないなら、設計とのズレ・セキュリティ問題をオーケストレーター層で検知する手段が失われます。
+
+## 改善提案
+
+- **pushの前に必ずゲートを挟む**: ローカルテスト green だけでなく、lint/型チェック/secret scanning を通し、`main`など保護ブランチには直接pushせずPR経由+必須チェックにする。人間承認 or 自動マージ条件を明文化する。
+- **ログではなく「構造化サマリ」をClaudeに返す**: 生ソースの往復は避けつつ、diff統計・テスト結果・lint結果・変更ファイル一覧程度は返すようにすると、コストを抑えたままClaude側で異常検知が可能になる。
+- **量子化と実VRAM見積もりを明記**: 使用する量子化レベル(Q4_K_M推奨)とその状態でのVRAM余裕を数値で書き、8192トークン設定との整合性(KVキャッシュ分の余裕)を確認する。
+- **失敗時のエスカレーション経路を定義**: リトライ3回失敗後にどうするか(Claudeが直接パッチを書く/人間に通知して停止/タスクをスキップ)が未定義。無限ループや silent failure を避けるため明示すべき。
+- **複雑度によるルーティング**: セキュリティ関連コードや複雑なロジックは14Bモデルに任せず、Claude側で直接処理する閾値を設ける(小さく明確に分解されたタスクのみローカルLLMに回す)。
+- **キューイングの実態を設計書に明記**: 「並行」ではなく「優先度付きシリアル実行」であることを書き、プロジェクト間の待ち時間・優先順位ルールを決める。
+
+**結論**: アーキテクチャの分業思想自体は妥当ですが、「無人push」「ログのみ返却によるレビュー空洞化」「VRAM/コンテキストの実現可能性未検証」の3点が現状のままだと運用に乗せた際の事故要因になりやすいです。特にGitHubへの自動pushにゲートを設けることは最優先で埋めるべき穴だと考えます。
+
+---
+<!-- uuid:abc1dbe2-71ce-4eb7-a968-66e97a816135 -->
+**2026-08-23T12:32:14.558Z**
+
+# ClaudeCode + ローカルLLMでの開発体制:実現可能な性能範囲とベスト環境提案
+
+前提の確認から: 「RTX3080 32GBメモリ」はおそらく **システムRAM 32GB + GPU RTX3080(VRAM 10GBまたは12GB)** の意味だと解釈します。RTX3080はVRAM 10GB版と12GB版があるため、両方のケースで想定を書きます。またGAMEリポジトリ自体は今セッションのスコープ外(app-Governanceのみ)なので、以前のsession-archiveから拾える情報(build/lint/tsc + ランダムプレイアウト60〜120回 + Playwrightスモーク)を前提にしています。実コードを見て精度を上げたければGAMEリポジトリをadd_repoして構成を確認できます。
+
+## 1. まず前提を疑う:ローカルLLMで削減すべきは「生成」か「検証出力」か
+
+以前の分析(session-archive)で特定されたGAMEの主要トークン消費源は**「テスト出力が会話履歴に乗って毎ターン再読込される」**ことでした。これはコード生成の問題ではなく検証出力の肥大化の問題です。したがって:
+
+- **最優先・低リスク・即効性**: GAMEのCIをGitHub Actionsに移す(TODO #1として既に記録済み)。これは量子化やVRAMの制約を一切受けず、ローカルLLMより先に着手すべきです。
+- **ローカルLLM導入**: これは別の削減軸(Claude自身がコード生成に費やすトークン)に効きますが、精度リスクを背負う分、CI移行より投資対効果は低いです。
+
+両者は独立した施策として並行できますが、優先順位はCI移行が先です。
+
+## 2. RTX3080 + 32GB RAMで現実的に扱えるLLMの範囲
+
+### VRAM収支(量子化前提、GGUF Q4_K_M基準)
+
+| モデル | パラメータ | Q4_K_M実測サイズ目安 | 10GB版での可否 | 12GB版での可否 |
+|---|---|---|---|---|
+| Qwen2.5-Coder-7B-Instruct | 7B | 約4.5〜5GB | 余裕あり(context 8192も可) | 余裕あり |
+| Qwen2.5-Coder-14B-Instruct | 14B | 約8.5〜9GB | ギリギリ(context 4096〜6144程度に抑える必要) | 余裕あり(8192も可) |
+| DeepSeek-Coder-V2-Lite-Instruct(MoE, 16B/active 2.4B) | 16B(疎) | 約9〜10GB | ギリギリ、context制限必須 | 可 |
+| Qwen2.5-Coder-32B-Instruct | 32B | 約19〜20GB | 不可(全層GPU) | 不可(全層GPU) |
+| Codestral-22B | 22B | 約13GB | 不可 | 部分オフロード時のみ可(遅い) |
+
+**結論**: 実用的な選択肢は事実上 **7B(高速・軽量) と 14B(高精度・ギリギリ)** の二択です。32B級は32GBのシステムRAMへ部分オフロード(CPU+GPU分割)すれば「動く」ものの、対話的な開発ループで使うには生成速度が実用外(数トークン/秒レベル)になりがちで、バッチ夜間実行のような用途以外には向きません。
+
+### 各モデルの実力の目安(コーディング用途)
+
+- **7B**: 定型的なボイラープレート、単純な関数実装、既存パターンの機械的な複製、テストフィクスチャ生成には十分。複雑なロジック・複数ファイルにまたがる整合性維持は不安定。
+- **14B(Q4量子化)**: 7Bよりは複雑なタスクに耐えるが、量子化による劣化で「設計書通りの型・エッジケース処理」を安定して守れない場面が出てくる。フォーマット厳守指示(コードのみ出力)への追従率も7Bよりは高いがClaudeレベルには程遠い。
+- **32B級(オフロード)**: 品質は上がるが速度が実用を割るため、この環境では「使えるが待てない」という結論になりやすい。
+
+## 3. ベストな環境構成の提案
+
+### モデル運用: タスク難易度によるルーティング(2段構成)
+
+```
+軽量・定型タスク → Qwen2.5-Coder-7B-Instruct (Q5_K_M, 常駐)
+  例: ボイラープレート、単純CRUD、テストフィクスチャ、
+      ランダムプレイアウトのハーネスコード生成
+
+中程度タスク → Qwen2.5-Coder-14B-Instruct (Q4_K_M, オンデマンドロード)
+  例: 既存パターンに則った機能追加、単一ファイル内の
+      比較的まとまったロジック実装
+
+高難度・設計判断が要るタスク → Claude Code (ローカルLLMに回さない)
+  例: アーキテクチャ変更、複数ファイルにまたがる整合性、
+      ゲームロジックの核となる判断、セキュリティ関連
+```
+
+これは前回の批評で挙げた「複雑度によるルーティング」の具体化です。7Bをデフォルト常駐にして即応性を確保し、14Bは必要時のみロード(Ollamaのモデルスワップで対応)することで、10GB版でもcontext長を圧迫せずに運用できます。
+
+### Ollama設定の目安
+
+- 7B運用時: `OLLAMA_CONTEXT_LENGTH=8192`, `OLLAMA_NUM_PARALLEL=1`
+- 14B運用時(10GB版): `OLLAMA_CONTEXT_LENGTH=4096〜6144`(KVキャッシュ分の余裕を残す)
+- 14B運用時(12GB版): `OLLAMA_CONTEXT_LENGTH=8192`も可
+
+### 品質担保の仕組み(必須)
+
+量子化された7B/14Bは指示追従が不安定なため、**生成結果を無条件で信用しない**前提の構成にする:
+
+1. 構文チェック(tsc --noEmit相当)を自動実行し、失敗したら即座に再生成
+2. lint通過を必須条件にする
+3. ローカルLLMの戻り値はClaudeに全文を返さず、「diff統計・テスト結果・lint結果」のみの構造化サマリを返す(前回提案どおり、Claude側のトークン消費を抑えつつレビュー能力を残す)
+4. 3回失敗したら人間 or Claudeにエスカレーション(silent failureを避ける)
+
+### 全体の投資優先順位
+
+1. **GAMEのCIをGitHub Actionsへ移行**(最優先・ローカルLLM不要・即効性大)
+2. **7Bモデルでの定型タスクオフロード**を小さく試験導入(低リスク・効果測定しやすい)
+3. 効果が確認できてから**14Bモデルでの中難度タスク拡張**を検討
+4. 32B級・部分オフロードは、対話的開発では見送り、将来的にVRAM増強(GPU買い替え)を検討する際の選択肢として保留
+
+この順序なら、リスクの低い施策から着手して効果を測りながら、量子化モデルの精度限界を前提にした無理のない運用に収まります。GAMEの実コード規模・既存テスト構成を踏まえてさらに具体化したい場合は、GAMEリポジトリをこのセッションに追加すれば実測ベースの提案に落とし込めます。
+
+---
+<!-- uuid:938a2269-846e-464a-8469-70919dc82924 -->
+**2026-08-23T12:42:15.349Z**
+
+はい、可能です。むしろ設計次第でGitHub Actions移行自体がトークン消費を大きく下げる施策になります。鍵は「YAML管理のトークンコスト」と「CI結果を読むトークンコスト」を別々に潰すことです。
+
+## 1. YAML管理コストを下げる: 一元化されたreusable workflow
+
+GAME・kakeibo・app-Governanceそれぞれに似たCI(build/lint/tsc/test)を個別に書くと、Claudeが編集するたびにN個のリポジトリで似たYAMLを都度考える羽目になり無駄です。代わりに:
+
+```
+xilitol111/app-Governance (または専用の共有リポジトリ)
+  .github/workflows/reusable-node-ci.yml   ← 実CIロジックを一箇所に集約
+
+xilitol111/GAME
+  .github/workflows/ci.yml
+    jobs:
+      ci:
+        uses: xilitol111/app-Governance/.github/workflows/reusable-node-ci.yml@main
+        with:
+          test-command: "npm run test:playouts && npx playwright test"
+
+xilitol111/kakeibo
+  .github/workflows/ci.yml
+    jobs:
+      ci:
+        uses: xilitol111/app-Governance/.github/workflows/reusable-node-ci.yml@main
+        with:
+          test-command: "npm test"
+```
+
+- 各リポジトリ側は`uses:`と`with:`だけの数行 → 新規CI設計時もリポジトリ間の重複編集が発生しない
+- ロジック変更(lintルール追加など)は共有ファイル1箇所を直せば全PJに波及 → 「N個編集」ではなく「1個編集」で済む
+- **公開リポジトリ同士ならowner(xilitol111)が同じである限り、追加の権限設定なしに他リポジトリのreusable workflowを参照可能**(private混在なら`permissions`とorg設定が必要になるので、その場合は要確認)
+
+## 2. CI結果を読むコストを下げる: ポーリングをやめてイベント駆動にする
+
+今のapp-Governanceセッション自体が使っている`subscribe_pr_activity`の仕組みがそのまま横展開できます。
+
+- Claudeが能動的にCIステータスを毎ターン確認する(ポーリング)のは最もトークンを食う設計 → 避ける
+- 各PJのPRを`subscribe_pr_activity`で購読しておけば、**CI失敗時だけ**webhookイベントとしてセッションに届く。成功時や無風時は何も会話に乗らない
+- これは「PJ横断」でも同じ仕組みが使い回せる。GAME/kakeibo/app-Governanceそれぞれ、必要なときにPRを購読するだけで、常時監視のための専用セッションや定期実行を組む必要がない
+
+## 3. 失敗時に読む情報量を圧縮する: 生ログではなくサマリを見る
+
+失敗時にClaudeが読むログが生の`npm test`出力そのままだと、以前特定した「テスト出力がそのまま会話履歴に乗る」問題が再発します。CI側で圧縮しておくのが効果的:
+
+- 各ジョブの最後に`$GITHUB_STEP_SUMMARY`へ**失敗したテスト名・件数・原因の要約**だけを書き出す(Markdown形式でGitHub上にも見やすく残る)
+- Claude側は`get_job_logs`で全文取得するのではなく、まず失敗ジョブのstatus/conclusionだけ確認し、必要な場合のみ該当ジョブのログを絞り込んで取得する(全run分ではなく該当jobのみ、`minimal_output`相当の使い方)
+- Playwrightのスモークテストのように出力が長くなりがちなものは、`--reporter=dot`や`--reporter=github`など簡潔なレポーターに変更しておくと、失敗時に読む量自体が減る
+
+## 4. まとめ: 全体設計の流れ
+
+```
+[各PJ] push/PR
+   ↓
+[GitHub Actions] reusable workflow実行(build/lint/tsc/test/playwright)
+   ↓ 失敗時のみ
+[GITHUB_STEP_SUMMARY] 失敗内容を圧縮して記録
+   ↓
+[webhook] subscribe_pr_activity経由でClaudeセッションに通知
+   ↓
+[Claude] status確認 → 必要なら該当jobのログのみ絞り込み取得 → 修正
+```
+
+この設計なら「YAML管理」「CI監視」「失敗調査」の3箇所すべてでトークン消費を抑えられます。GAME/kakeiboを実際にこの構成にする場合、両リポジトリへの書き込み権限が必要な段階(reusable workflowの雛形作成、既存テストコマンドの実際の把握)があるので、着手する際は該当リポジトリをこのセッションにadd_repoするか、当該PJのセッションで進める形になります。
+
+---
+<!-- uuid:55efb7ba-049d-4185-94ec-a1be7e9b0a55 -->
+**2026-08-23T12:45:18.193Z**
+
+`add_repo`はGitリポジトリへの読み取り/push権限を付与するだけで、GitHubの「設定(Settings)」画面に相当するAPI操作までは行えません。両者は別物です。
+
+## `add_repo`(push権限)+ 現在のGitHub MCPツールでできること
+
+- リポジトリのclone・ファイル読み取り
+- ブランチ作成、`.github/workflows/*.yml`のようなワークフローファイルのpush/作成・更新(`push_files` / `create_or_update_file`)
+- Pull Requestの作成・マージ
+- CIのstatus/job logの確認、PRアクティビティの購読
+
+つまり**reusable workflowや各PJの呼び出し用YAMLをコードとして書いてpushし、PRを立てるところまでは可能**です。
+
+## `add_repo`しても届かないもの(GitHub側の「設定」)
+
+現在使えるGitHub MCPツールの一覧には、以下に対応するものが含まれていません:
+
+- **Actions有効化設定**(Settings → Actions → General。組織/リポジトリでActionsが無効化されている場合、有効化するにはこの画面操作が必要)
+- **Branch protection / required status checks**(新設したCIジョブを「マージ必須チェック」に昇格させる設定)
+- **Secrets / Variables の追加**(reusable workflowが外部サービスキー等を必要とする場合)
+- **Organization設定**(reusable workflowをprivateリポジトリ間で共有する場合の`Access`設定など。今回のように公開リポジトリ同士なら通常この制限には引っかかりません)
+
+これらは私からは操作できないため、**ユーザー側でGitHub Web UIから手動設定していただく必要があります**。該当箇所が出てきた時点で、具体的にどの画面のどの設定を変更すればいいかは明示します。
+
+## 結論
+
+- コード面(ワークフロー定義・reusable workflow構成・PR作成)は`add_repo`だけで完結して進められる
+- 設定面(Actions有効化・ブランチ保護・シークレット)が必要になった場合はそこだけユーザーの手動操作を挟む、というハイブリッド運用になります
+
+GAME/kakeiboで実際に着手する場合、まず両リポジトリを`add_repo`し、既存のActions設定状況(有効/無効、既存workflow有無)を確認してから、どこで手動設定が必要になるか洗い出す、という順番で進めるのが効率的です。
+
+---
+<!-- uuid:a44ddef1-ae9d-441f-8c07-72cab163b132 -->
+**2026-08-23T12:46:22.764Z**
+
+以下のフェーズで進めるのが良いと思います。CLAUDE.mdの運用方針(実装前に設計を固める、人間が承認するチェックポイントを残す)に沿って、コードを書く前に短い設計メモを挟みます。
+
+## 進め方(フェーズ構成)
+
+**Phase 0: リポジトリ追加**
+GAME・kakeiboをこのセッションに`add_repo`(push権限)。まずは現状把握のためだけなので、実際の変更はまだ行わない。
+
+**Phase 1: 現状把握(各PJ)**
+- 既存の`.github/workflows/`の有無、package.jsonのテスト/lint/buildスクリプト内容を確認
+- GAMEは「build/lint/tsc + ランダムプレイアウト60〜120回 + Playwrightスモーク」と把握済みなので、実際のnpm scriptsの名前・実行時間の目安を確認
+- kakeiboは未確認なので同様に確認
+
+**Phase 2: 設計メモ作成(実装前ゲート)**
+`docs/plans/`配下に短い設計ドキュメントを1本作成し、以下を明文化:
+- reusable workflowの置き場所(app-Governanceに置くか、専用の共有リポジトリを新設するか)
+- input parameters設計(test-command, node-versionなど、PJごとに違う部分)
+- `$GITHUB_STEP_SUMMARY`での失敗サマリ圧縮の実装方針
+- 手動設定が必要になりそうな箇所の事前洗い出し(Actions有効化状況、branch protectionの有無)
+
+ここは「2分見るだけの設計レビュー」に相当するので、書いた後に一度内容を確認してもらってから次に進みます。
+
+**Phase 3: 実装**
+- reusable workflow本体を作成・push
+- GAME側に薄いcaller workflowを追加(既存のセッション内テスト実行はここで置き換え)
+- PRを作成し、CIが実際にgreenになることを確認
+
+**Phase 4: 手動設定の依頼**
+Phase 1〜3で見つかった「Actions有効化」「branch protection」等、私から操作できない設定項目をリストアップして依頼
+
+**Phase 5: 運用切替**
+- `subscribe_pr_activity`でPRを購読し、以降はイベント駆動でCI結果を受け取る形に切替
+- GAME側のセッション内でのテスト全文実行(既存の高コストな運用)をやめる
+
+---
+
+まずPhase 0から着手してよければ、**どちらのリポジトリから先に進めるか**教えてください(GAMEが最もトークン消費インパクトが大きいと以前の分析で出ているので、GAME優先を推奨します)。
+
+---
+<!-- uuid:be0184c2-82fe-4640-964f-97c0e1b18693 -->
+**2026-08-23T12:49:00.807Z**
+
+add_repoツールを使って、GAME・kakeiboそれぞれのowner/repo名を指定して呼び出すだけです。事前のcurl/gh確認などは不要で(private repoは404を返すことがあり誤誘導になるため)、直接呼び出します。
+
+呼び出し方の例:
+
+```
+add_repo(owner="xilitol111", repo="GAME", access="push")
+add_repo(owner="xilitol111", repo="kakeibo", access="push")
+```
+
+- `access`は`"read"`(fetch/clone・閲覧のみ)か`"push"`(commit・PR作成まで行う)を選べます。今回はワークフローファイルをpushしてPRを作る想定なので`"push"`が必要です。
+- 呼び出すとクローン用のコマンドが返るので、それを実行してcloneした後、`register_repo_root`でそのディレクトリを登録すれば、そのリポジトリのCLAUDE.md/skillsも読み込まれるようになります。
+- リポジトリ名が正確に分からない場合は`list_repos(query="GAME")`のように検索できます。
+
+GAMEから始める前提で進めてよければ、実際に`add_repo`を呼び出します。進めてよいですか？
+
+---
+<!-- uuid:98881c6c-8965-4100-9c7d-2550d57057e4 -->
+**2026-08-23T12:51:44.799Z**
+
+3リポジトリ(GAME, kakeibo, kakeibo-liff)すべてclone・登録が完了しました。次のターンで各CLAUDE.mdが読み込まれるはずです。
+
+Phase 1(現状把握)に進み、各リポジトリの既存`.github/workflows/`の有無とテスト/lint/buildスクリプトを確認しましょうか、それとも一旦ここで区切りますか？
+
+---
+<!-- uuid:7589641f-b819-47dd-b788-0d70b7c26ba1 -->
+**2026-08-23T12:54:32.503Z**
+
+未コミットの変更はなく、直近の会話内容(GitHub Actions横断設計の検討、GAME/kakeibo/kakeibo-liffの3リポジトリ追加)も`docs/session-archive.md`へ自動archiveされpush済みです。次のセッションは`git log`とarchive末尾から今の到達点(3リポジトリ追加済み・Phase 1着手前)を拾えるので、`/clear`しても再開可能です。
+
+`/clear`
+
+---
+<!-- uuid:2c2ba046-642c-423e-8bca-100f8b18916f -->
+**2026-08-23T12:58:46.857Z**
+
+Both PRs are open and I'm watching them:
+
+- **GAME**: [xilitol111/GAME#7](https://github.com/xilitol111/GAME/pull/7) — draft, adds `.github/workflows/ci.yml` (build+lint). Verified locally green before pushing.
+- **app-Governance**: [xilitol111/app-Governance#9](https://github.com/xilitol111/app-Governance/pull/9) — draft, updates the tracking doc with Phase 1 findings.
+
+Key finding worth flagging: GAME has no committed automated test suite at all — the "random playouts + Playwright smoke tests" from earlier sessions were never checked in, so CI currently only covers build+lint. That gap is now tracked as item 1b in `docs/plans/token-consumption-followups.md`. kakeibo and kakeibo-liff were confirmed to not fit an npm-based CI approach and are deferred per your choice.
+
+I'll keep watching both PRs for CI results and review activity.
+
+---
+<!-- uuid:1ed263d3-f874-4cf5-8726-4f1fffa93b86 -->
+**2026-08-23T12:59:11.550Z**
+
+CI on GAME#7 came back green (build + lint both passed). Both PRs are clean and mergeable with no review activity yet, so there's nothing to act on right now. I've scheduled a check-in in an hour to keep watching both.
+
+---
+<!-- uuid:10ec98fe-2322-4d4d-a0b7-f2c3debe9591 -->
+**2026-08-23T12:59:23.100Z**
+
+GAME#7のCIはグリーン(build+lint成功)でした。両PRともclean/mergeable、レビューコメントもまだなく、今すぐ対応が必要な事項はありません。1時間後に再チェックするようスケジュール済みです。
+
+---
+<!-- uuid:4428b079-0be5-4a1f-97e4-ea3b7745d388 -->
+**2026-08-23T12:59:58.913Z**
+
+app-Governance#9はドラフト解除され、レビュー可能な状態になりました(CI設定なしのためチェックは無し、mergeable_stateもclean)。特に対応が必要な事項はないので、そのまま監視を継続します。
