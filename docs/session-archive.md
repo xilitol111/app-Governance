@@ -1025,3 +1025,70 @@ GAMEには現状CIが無く、「build/lint/tsc + ランダムプレイアウト
 4. 32B級・部分オフロードは、対話的開発では見送り、将来的にVRAM増強(GPU買い替え)を検討する際の選択肢として保留
 
 この順序なら、リスクの低い施策から着手して効果を測りながら、量子化モデルの精度限界を前提にした無理のない運用に収まります。GAMEの実コード規模・既存テスト構成を踏まえてさらに具体化したい場合は、GAMEリポジトリをこのセッションに追加すれば実測ベースの提案に落とし込めます。
+
+---
+<!-- uuid:938a2269-846e-464a-8469-70919dc82924 -->
+**2026-08-23T12:42:15.349Z**
+
+はい、可能です。むしろ設計次第でGitHub Actions移行自体がトークン消費を大きく下げる施策になります。鍵は「YAML管理のトークンコスト」と「CI結果を読むトークンコスト」を別々に潰すことです。
+
+## 1. YAML管理コストを下げる: 一元化されたreusable workflow
+
+GAME・kakeibo・app-Governanceそれぞれに似たCI(build/lint/tsc/test)を個別に書くと、Claudeが編集するたびにN個のリポジトリで似たYAMLを都度考える羽目になり無駄です。代わりに:
+
+```
+xilitol111/app-Governance (または専用の共有リポジトリ)
+  .github/workflows/reusable-node-ci.yml   ← 実CIロジックを一箇所に集約
+
+xilitol111/GAME
+  .github/workflows/ci.yml
+    jobs:
+      ci:
+        uses: xilitol111/app-Governance/.github/workflows/reusable-node-ci.yml@main
+        with:
+          test-command: "npm run test:playouts && npx playwright test"
+
+xilitol111/kakeibo
+  .github/workflows/ci.yml
+    jobs:
+      ci:
+        uses: xilitol111/app-Governance/.github/workflows/reusable-node-ci.yml@main
+        with:
+          test-command: "npm test"
+```
+
+- 各リポジトリ側は`uses:`と`with:`だけの数行 → 新規CI設計時もリポジトリ間の重複編集が発生しない
+- ロジック変更(lintルール追加など)は共有ファイル1箇所を直せば全PJに波及 → 「N個編集」ではなく「1個編集」で済む
+- **公開リポジトリ同士ならowner(xilitol111)が同じである限り、追加の権限設定なしに他リポジトリのreusable workflowを参照可能**(private混在なら`permissions`とorg設定が必要になるので、その場合は要確認)
+
+## 2. CI結果を読むコストを下げる: ポーリングをやめてイベント駆動にする
+
+今のapp-Governanceセッション自体が使っている`subscribe_pr_activity`の仕組みがそのまま横展開できます。
+
+- Claudeが能動的にCIステータスを毎ターン確認する(ポーリング)のは最もトークンを食う設計 → 避ける
+- 各PJのPRを`subscribe_pr_activity`で購読しておけば、**CI失敗時だけ**webhookイベントとしてセッションに届く。成功時や無風時は何も会話に乗らない
+- これは「PJ横断」でも同じ仕組みが使い回せる。GAME/kakeibo/app-Governanceそれぞれ、必要なときにPRを購読するだけで、常時監視のための専用セッションや定期実行を組む必要がない
+
+## 3. 失敗時に読む情報量を圧縮する: 生ログではなくサマリを見る
+
+失敗時にClaudeが読むログが生の`npm test`出力そのままだと、以前特定した「テスト出力がそのまま会話履歴に乗る」問題が再発します。CI側で圧縮しておくのが効果的:
+
+- 各ジョブの最後に`$GITHUB_STEP_SUMMARY`へ**失敗したテスト名・件数・原因の要約**だけを書き出す(Markdown形式でGitHub上にも見やすく残る)
+- Claude側は`get_job_logs`で全文取得するのではなく、まず失敗ジョブのstatus/conclusionだけ確認し、必要な場合のみ該当ジョブのログを絞り込んで取得する(全run分ではなく該当jobのみ、`minimal_output`相当の使い方)
+- Playwrightのスモークテストのように出力が長くなりがちなものは、`--reporter=dot`や`--reporter=github`など簡潔なレポーターに変更しておくと、失敗時に読む量自体が減る
+
+## 4. まとめ: 全体設計の流れ
+
+```
+[各PJ] push/PR
+   ↓
+[GitHub Actions] reusable workflow実行(build/lint/tsc/test/playwright)
+   ↓ 失敗時のみ
+[GITHUB_STEP_SUMMARY] 失敗内容を圧縮して記録
+   ↓
+[webhook] subscribe_pr_activity経由でClaudeセッションに通知
+   ↓
+[Claude] status確認 → 必要なら該当jobのログのみ絞り込み取得 → 修正
+```
+
+この設計なら「YAML管理」「CI監視」「失敗調査」の3箇所すべてでトークン消費を抑えられます。GAME/kakeiboを実際にこの構成にする場合、両リポジトリへの書き込み権限が必要な段階(reusable workflowの雛形作成、既存テストコマンドの実際の把握)があるので、着手する際は該当リポジトリをこのセッションにadd_repoするか、当該PJのセッションで進める形になります。
