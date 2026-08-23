@@ -1291,3 +1291,16 @@ app-Governance#10(PRマージ境界での`/clear`促し実装)もマージされ
 - **app-Governance**: Phase 1調査結果、PRマージ境界`/clear`促し機能ともにマージ済み
 
 残タスクは`docs/plans/token-consumption-followups.md`のitem 1b(GAMEの実テストスイート未コミット)以降です。続けますか、それともここで一区切りにしますか？
+
+---
+<!-- uuid:ea847062-7e73-4bfd-9e17-d0877fc615b0 -->
+**2026-08-23T14:18:27.255Z**
+
+PR [xilitol111/app-Governance#11](https://github.com/xilitol111/app-Governance/pull/11) も作成し、監視を開始しました。
+
+## まとめ
+
+- **kakeibo CLAUDE.md分割**: 1,922行 → 143行に圧縮、履歴は`docs/DEVLOG.md`へ機械的に移動(内容欠落なしをdiffで検証済み)。PR [kakeibo#7](https://github.com/xilitol111/kakeibo/pull/7)
+- **followupsドキュメント更新**: item 3を完了マーク。PR [app-Governance#11](https://github.com/xilitol111/app-Governance/pull/11)
+
+両PRとも監視中です。残タスクはitem 1b(GAMEの実テストスイート未コミット)、4、5、6。続けますか、それとも一区切りにしますか？
