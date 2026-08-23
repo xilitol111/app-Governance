@@ -1278,3 +1278,16 @@ Remaining open items in the followups doc: 1b (commit an actual GAME test suite)
 **2026-08-23T13:20:08.379Z**
 
 PR #10 has no actionable activity yet (just subscription confirmations, and this repo has no CI). I've scheduled a check-in in an hour and will keep watching quietly.
+
+---
+<!-- uuid:ea2f9c39-872d-49bd-8a95-4facabf8adc4 -->
+**2026-08-23T13:40:49.268Z**
+
+app-Governance#10(PRマージ境界での`/clear`促し実装)もマージされました。監視対象PRはすべて完了です。
+
+現状まとめ:
+- **GAME**: CI(build+lint)導入済み・マージ済み
+- **kakeibo / kakeibo-liff**: npmベースCI対象外と確認済み
+- **app-Governance**: Phase 1調査結果、PRマージ境界`/clear`促し機能ともにマージ済み
+
+残タスクは`docs/plans/token-consumption-followups.md`のitem 1b(GAMEの実テストスイート未コミット)以降です。続けますか、それともここで一区切りにしますか？
