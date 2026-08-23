@@ -1092,3 +1092,36 @@ xilitol111/kakeibo
 ```
 
 この設計なら「YAML管理」「CI監視」「失敗調査」の3箇所すべてでトークン消費を抑えられます。GAME/kakeiboを実際にこの構成にする場合、両リポジトリへの書き込み権限が必要な段階(reusable workflowの雛形作成、既存テストコマンドの実際の把握)があるので、着手する際は該当リポジトリをこのセッションにadd_repoするか、当該PJのセッションで進める形になります。
+
+---
+<!-- uuid:55efb7ba-049d-4185-94ec-a1be7e9b0a55 -->
+**2026-08-23T12:45:18.193Z**
+
+`add_repo`はGitリポジトリへの読み取り/push権限を付与するだけで、GitHubの「設定(Settings)」画面に相当するAPI操作までは行えません。両者は別物です。
+
+## `add_repo`(push権限)+ 現在のGitHub MCPツールでできること
+
+- リポジトリのclone・ファイル読み取り
+- ブランチ作成、`.github/workflows/*.yml`のようなワークフローファイルのpush/作成・更新(`push_files` / `create_or_update_file`)
+- Pull Requestの作成・マージ
+- CIのstatus/job logの確認、PRアクティビティの購読
+
+つまり**reusable workflowや各PJの呼び出し用YAMLをコードとして書いてpushし、PRを立てるところまでは可能**です。
+
+## `add_repo`しても届かないもの(GitHub側の「設定」)
+
+現在使えるGitHub MCPツールの一覧には、以下に対応するものが含まれていません:
+
+- **Actions有効化設定**(Settings → Actions → General。組織/リポジトリでActionsが無効化されている場合、有効化するにはこの画面操作が必要)
+- **Branch protection / required status checks**(新設したCIジョブを「マージ必須チェック」に昇格させる設定)
+- **Secrets / Variables の追加**(reusable workflowが外部サービスキー等を必要とする場合)
+- **Organization設定**(reusable workflowをprivateリポジトリ間で共有する場合の`Access`設定など。今回のように公開リポジトリ同士なら通常この制限には引っかかりません)
+
+これらは私からは操作できないため、**ユーザー側でGitHub Web UIから手動設定していただく必要があります**。該当箇所が出てきた時点で、具体的にどの画面のどの設定を変更すればいいかは明示します。
+
+## 結論
+
+- コード面(ワークフロー定義・reusable workflow構成・PR作成)は`add_repo`だけで完結して進められる
+- 設定面(Actions有効化・ブランチ保護・シークレット)が必要になった場合はそこだけユーザーの手動操作を挟む、というハイブリッド運用になります
+
+GAME/kakeiboで実際に着手する場合、まず両リポジトリを`add_repo`し、既存のActions設定状況(有効/無効、既存workflow有無)を確認してから、どこで手動設定が必要になるか洗い出す、という順番で進めるのが効率的です。
