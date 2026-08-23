@@ -15,8 +15,8 @@ actually needed.
 
 ## Items, priority order
 
-1. [~] **Move GAME's test/verification suite to CI** — PR open:
-   https://github.com/xilitol111/GAME/pull/7 (draft, watched)
+1. [x] **Move GAME's test/verification suite to CI** — merged 2026-08-23:
+   https://github.com/xilitol111/GAME/pull/7
    Write access confirmed 2026-08-23 (GAME/kakeibo/kakeibo-liff all added
    with `access: push`). Phase 1 investigation (2026-08-23) found the
    original scoping was wrong: GAME has **no committed automated test
@@ -46,17 +46,18 @@ actually needed.
     `ci.yml`. Not started; no test framework dependency exists in
     `package.json` yet.
 
-2. [ ] **Code a PR-merge-boundary `/clear` nudge, mirroring the five-hour
-   notification mechanism** (this repo, `hooks/archive-turn.py`)
-   Root cause of the single largest segment found (2.42億 tokens, 38% of
-   GAME's 8/22 total): a session ran through a PR merge into the next batch
-   with no `/clear`. Same mechanism as the existing `THRESHOLD_TOKENS`
-   interval nudge — detect a `merge_pull_request` (or equivalent) tool call
-   in the transcript, and on the next Stop hook after it, surface a
-   `decision:"block"` reason once suggesting `/clear`/`/compact` via
-   AskUserQuestion, instead of leaving this purely to CLAUDE.md prose that
-   evidently isn't always followed in practice. High impact, low effort,
-   stays inside this repo.
+2. [x] **Code a PR-merge-boundary `/clear` nudge, mirroring the five-hour
+   notification mechanism** (this repo, `hooks/archive-turn.py`) — done
+   2026-08-23. Added `find_last_successful_merge` + `maybe_notify_pr_merge`:
+   detects a successful `mcp__github__merge_pull_request` tool call in the
+   transcript and fires a one-time-per-merge `decision:"block"` reason (deduped
+   via a `/tmp/.pr-merge-notified-{session_id}` marker, same pattern as the
+   five-hour interval nudge) suggesting `/clear`/`/compact` via
+   AskUserQuestion. Combined with the interval nudge's reason text (joined
+   with `\n\n`) if both fire on the same turn, since a Stop hook only gets one
+   `reason` field. Unit-verified locally with a synthetic transcript
+   (dedup + error-case suppression both confirmed) — not yet observed live
+   against a real merge in this session.
 
 3. [ ] **Actually split kakeibo's CLAUDE.md** **(needs app-repo write access)**
    kakeibo's `CLAUDE.md` is 1,889 lines / 203,913 bytes; only the first ~131
