@@ -1447,3 +1447,63 @@ No changes on either PR — re-armed silently for another check in an hour.
 ## 結論
 - 定量的な運用ルール（フォールバック閾値、エスカレーション段階、人間ゲート）は仕様として成熟しており、この部分は「試す価値がある」レベルです。
 - 一方で**Step 1モデル自体の実在性・性能数値が未検証**という土台のリスクが、今回の版では明記が薄れています。着手前の最優先事項として「モデル実在確認 → 実測ベンチマーク → 閾値の再確定」を明示的なStep 0として仕様書に戻すことを強く推奨します。これが崩れた場合の代替モデル（例: Gemma 3 27B, Qwen2.5-32B等）も併記しておくと、着手直前になって設計そのものをやり直す手戻りを防げます。
+
+---
+<!-- uuid:05aa5d01-d73c-4d3e-a11b-91b59094dd4c -->
+**2026-08-23T15:45:04.682Z**
+
+## 検証結果：モデル実在性は **確認済み** ✅
+
+**Gemma 4 26B-A4B は実在し、公式Google DeepMindからリリースされた正規モデルです。**
+
+### 実在確認済みの事実
+
+| 項目 | 検証結果 |
+|------|---------|
+| **モデル実在性** | ✅ 公式存在（Google DeepMind、2026年4月-7月リリース） |
+| **アーキテクチャ** | ✅ 25.2B総パラメータ、3.8B active per token のMoE |
+| **HuggingFace** | ✅ `google/gemma-4-26B-A4B` 公式カード存在 |
+| **Ollama対応** | ✅ `gemma4:26b-a4b-it-q4_K_M` 等で利用可能 |
+| **GGUF量子化** | ✅ Unsloth UD-Q4_K_XL版存在（推奨） |
+| **llama.cpp対応** | ✅ 29種の量子化版を提供 |
+
+### 生成速度（重要：仕様書の「1.8倍」の根拠が不明）
+
+| 環境 | 実測速度 | 注記 |
+|------|---------|------|
+| **RTX 3090/4090 + Q4量子化** | 35-128 tok/s | 量子化方式により大きく変動 |
+| **llama.cpp（単一リクエスト）** | 51.57 tok/s | 標準的な環境 |
+| **RTX Pro 6000 Blackwell** | 47 tok/s | エンタープライズGPU |
+
+**⚠️ 問題点：** 
+- 仕様書の「生成速度1.8倍」は**比較対象が明記されていない** → 根拠不明
+- ユーザーが設定した「5 tok/s以上で継続」という閾値は実測値からすると**極めて保守的** （実際は50+ tok/s が出ている）
+
+### メモリ要件
+
+- **Unsloth UD-Q4_K_XL版：** 約15GB （仕様書の「19-20GB」より小さい）
+- **VRAM 10GB環境での実装：** Q4_K_M や Q3量子化版を選択すべき（UD-Q4_K_XLでは容量が厳しい）
+
+### 結論
+
+✅ **モデルの実在性・基本構成は検証済み**  
+⚠️ **「生成速度1.8倍」の根拠は不明確 → 実機計測で確定する必要あり**  
+⚠️ **メモリ見積もりは若干粗い → 量子化版選択時に実際のVRAM占有量を再確認すべき**
+
+---
+
+## 推奨アクション
+
+1. **着手前の実測ベンチマーク：** RTX 3080/3090 + Ollama/llama.cpp環境で Gemma 4 26B-A4B を実際に走らせ、TTFT・tok/sを計測
+2. **量子化版の選択：** 「UD-Q4_K_XL」ではVRAM超過のリスク → 実環境に合わせて「Q4_K_M」「Q3」から選定
+3. **閾値の再設定：** 実測結果に基づき、単純な「5 tok/s」ではなく、実環境での許容TTFT・生成速度で再定義
+
+---
+
+**Sources:**
+- [google/gemma-4-26B-A4B · Hugging Face](https://huggingface.co/google/gemma-4-26B-A4B)
+- [Gemma 4 model overview | Google AI for Developers](https://ai.google.dev/gemma/docs/core)
+- [Ollama - Gemma4](https://ollama.com/library/gemma4)
+- [unsloth/gemma-4-26B-A4B-it-GGUF · Hugging Face](https://huggingface.co/unsloth/gemma-4-26B-A4B-it-GGUF)
+- [Gemma 4 on Ollama: Real 26B & 31B Speed Benchmarks (2026) | Markaicode](https://markaicode.com/benchmarks/gemma-4-ollama-benchmark/)
+- [Benchmarking Gemma-4–26B (A4B) on the DGX Spark | Medium](https://medium.com/@james-tang/benchmarking-gemma-4-26b-a4b-on-the-dgx-spark-dc8245292095)
