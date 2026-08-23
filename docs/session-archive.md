@@ -1226,3 +1226,9 @@ CI on GAME#7 came back green (build + lint both passed). Both PRs are clean and 
 **2026-08-23T12:59:23.100Z**
 
 GAME#7のCIはグリーン(build+lint成功)でした。両PRともclean/mergeable、レビューコメントもまだなく、今すぐ対応が必要な事項はありません。1時間後に再チェックするようスケジュール済みです。
+
+---
+<!-- uuid:4428b079-0be5-4a1f-97e4-ea3b7745d388 -->
+**2026-08-23T12:59:58.913Z**
+
+app-Governance#9はドラフト解除され、レビュー可能な状態になりました(CI設定なしのためチェックは無し、mergeable_stateもclean)。特に対応が必要な事項はないので、そのまま監視を継続します。
