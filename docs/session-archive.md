@@ -1246,3 +1246,16 @@ app-Governance#9(Phase 1調査結果ドキュメント)がマージされまし�
 **2026-08-23T13:17:33.525Z**
 
 GAME#7がドラフト解除され、レビュー可能な状態になりました。CIは既にgreen(build+lint成功)、mergeableで、現時点で追加対応が必要な事項はありません。このまま監視を継続します。
+
+---
+<!-- uuid:87024bd9-3746-48a6-8520-5f4f45885251 -->
+**2026-08-23T13:17:43.975Z**
+
+GAME#7がマージされました。GAMEにbuild+lintのCIが導入され、監視対象の2件(app-Governance#9、GAME#7)ともマージ完了です。
+
+現状のまとめ:
+- **GAME**: `.github/workflows/ci.yml`(build+lint)導入・マージ済み。ただし自動テスト(ランダムプレイアウト/Playwrightスモーク)は未コミットのため、CIはまだbuild+lintのみをカバー
+- **kakeibo / kakeibo-liff**: npmベースのCIアプローチに合わず対象外(前回確認済み)
+- 積み残しは`docs/plans/token-consumption-followups.md`のitem 1b(GAMEのテストスイート未コミット問題)
+
+次に進めるとすれば、GAMEのテストスイート(build/lintの先にある実テスト)をCIに組み込む作業になりますが、今回はここで一区切りとします。何か指示があれば続けます。
