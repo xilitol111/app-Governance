@@ -1201,3 +1201,16 @@ Phase 1(現状把握)に進み、各リポジトリの既存`.github/workflows/`
 未コミットの変更はなく、直近の会話内容(GitHub Actions横断設計の検討、GAME/kakeibo/kakeibo-liffの3リポジトリ追加)も`docs/session-archive.md`へ自動archiveされpush済みです。次のセッションは`git log`とarchive末尾から今の到達点(3リポジトリ追加済み・Phase 1着手前)を拾えるので、`/clear`しても再開可能です。
 
 `/clear`
+
+---
+<!-- uuid:2c2ba046-642c-423e-8bca-100f8b18916f -->
+**2026-08-23T12:58:46.857Z**
+
+Both PRs are open and I'm watching them:
+
+- **GAME**: [xilitol111/GAME#7](https://github.com/xilitol111/GAME/pull/7) — draft, adds `.github/workflows/ci.yml` (build+lint). Verified locally green before pushing.
+- **app-Governance**: [xilitol111/app-Governance#9](https://github.com/xilitol111/app-Governance/pull/9) — draft, updates the tracking doc with Phase 1 findings.
+
+Key finding worth flagging: GAME has no committed automated test suite at all — the "random playouts + Playwright smoke tests" from earlier sessions were never checked in, so CI currently only covers build+lint. That gap is now tracked as item 1b in `docs/plans/token-consumption-followups.md`. kakeibo and kakeibo-liff were confirmed to not fit an npm-based CI approach and are deferred per your choice.
+
+I'll keep watching both PRs for CI results and review activity.
