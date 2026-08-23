@@ -1259,3 +1259,16 @@ GAME#7がマージされました。GAMEにbuild+lintのCIが導入され、監�
 - 積み残しは`docs/plans/token-consumption-followups.md`のitem 1b(GAMEのテストスイート未コミット問題)
 
 次に進めるとすれば、GAMEのテストスイート(build/lintの先にある実テスト)をCIに組み込む作業になりますが、今回はここで一区切りとします。何か指示があれば続けます。
+
+---
+<!-- uuid:023b2653-d0fc-4106-bd8a-3a67e737767a -->
+**2026-08-23T13:19:52.840Z**
+
+Opened draft PR [#10](https://github.com/xilitol111/app-Governance/pull/10) and I'm watching it.
+
+Summary of what got done this turn:
+- Confirmed GAME#7 (CI build+lint) and app-Governance#9 (Phase 1 findings) are both merged.
+- Implemented item 2 from `docs/plans/token-consumption-followups.md`: `hooks/archive-turn.py` now detects a successful PR merge in the transcript and fires a one-time `/clear`/`/compact` nudge, mirroring the five-hour interval mechanism. Unit-verified with synthetic transcripts (dedup + error suppression both check out).
+- Updated the followups doc (items 1 and 2 now marked done) and pushed everything.
+
+Remaining open items in the followups doc: 1b (commit an actual GAME test suite), 3 (split kakeibo's CLAUDE.md), 4, 5, 6 — let me know if you want me to keep going on one of those next.
