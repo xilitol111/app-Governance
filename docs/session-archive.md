@@ -1125,3 +1125,44 @@ xilitol111/kakeibo
 - 設定面(Actions有効化・ブランチ保護・シークレット)が必要になった場合はそこだけユーザーの手動操作を挟む、というハイブリッド運用になります
 
 GAME/kakeiboで実際に着手する場合、まず両リポジトリを`add_repo`し、既存のActions設定状況(有効/無効、既存workflow有無)を確認してから、どこで手動設定が必要になるか洗い出す、という順番で進めるのが効率的です。
+
+---
+<!-- uuid:a44ddef1-ae9d-441f-8c07-72cab163b132 -->
+**2026-08-23T12:46:22.764Z**
+
+以下のフェーズで進めるのが良いと思います。CLAUDE.mdの運用方針(実装前に設計を固める、人間が承認するチェックポイントを残す)に沿って、コードを書く前に短い設計メモを挟みます。
+
+## 進め方(フェーズ構成)
+
+**Phase 0: リポジトリ追加**
+GAME・kakeiboをこのセッションに`add_repo`(push権限)。まずは現状把握のためだけなので、実際の変更はまだ行わない。
+
+**Phase 1: 現状把握(各PJ)**
+- 既存の`.github/workflows/`の有無、package.jsonのテスト/lint/buildスクリプト内容を確認
+- GAMEは「build/lint/tsc + ランダムプレイアウト60〜120回 + Playwrightスモーク」と把握済みなので、実際のnpm scriptsの名前・実行時間の目安を確認
+- kakeiboは未確認なので同様に確認
+
+**Phase 2: 設計メモ作成(実装前ゲート)**
+`docs/plans/`配下に短い設計ドキュメントを1本作成し、以下を明文化:
+- reusable workflowの置き場所(app-Governanceに置くか、専用の共有リポジトリを新設するか)
+- input parameters設計(test-command, node-versionなど、PJごとに違う部分)
+- `$GITHUB_STEP_SUMMARY`での失敗サマリ圧縮の実装方針
+- 手動設定が必要になりそうな箇所の事前洗い出し(Actions有効化状況、branch protectionの有無)
+
+ここは「2分見るだけの設計レビュー」に相当するので、書いた後に一度内容を確認してもらってから次に進みます。
+
+**Phase 3: 実装**
+- reusable workflow本体を作成・push
+- GAME側に薄いcaller workflowを追加(既存のセッション内テスト実行はここで置き換え)
+- PRを作成し、CIが実際にgreenになることを確認
+
+**Phase 4: 手動設定の依頼**
+Phase 1〜3で見つかった「Actions有効化」「branch protection」等、私から操作できない設定項目をリストアップして依頼
+
+**Phase 5: 運用切替**
+- `subscribe_pr_activity`でPRを購読し、以降はイベント駆動でCI結果を受け取る形に切替
+- GAME側のセッション内でのテスト全文実行(既存の高コストな運用)をやめる
+
+---
+
+まずPhase 0から着手してよければ、**どちらのリポジトリから先に進めるか**教えてください(GAMEが最もトークン消費インパクトが大きいと以前の分析で出ているので、GAME優先を推奨します)。
