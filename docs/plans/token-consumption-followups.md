@@ -15,17 +15,36 @@ actually needed.
 
 ## Items, priority order
 
-1. [ ] **Move GAME's test/verification suite to CI** **(needs app-repo write access)**
-   GAME has no CI configured; build/lint/tsc + 60-120 randomized playouts +
-   Playwright smoke tests currently run inline inside Claude Code sessions
-   every batch, and that output stays in the conversation transcript for the
-   rest of the session (re-read, at cost, every subsequent turn). Tool-heavy
-   turns were measured at ~3x the token cost of plain conversational turns
-   (see archive-turn.py's own docstring investigation). Moving verification
-   to GitHub Actions means Claude pushes and checks a pass/fail result
-   instead of keeping the full test output in-context. Highest estimated
-   impact, moderate setup effort (CI workflow authoring + verifying it
-   actually replaces, not just duplicates, the inline runs).
+1. [~] **Move GAME's test/verification suite to CI** — PR open:
+   https://github.com/xilitol111/GAME/pull/7 (draft, watched)
+   Write access confirmed 2026-08-23 (GAME/kakeibo/kakeibo-liff all added
+   with `access: push`). Phase 1 investigation (2026-08-23) found the
+   original scoping was wrong: GAME has **no committed automated test
+   suite** at all — `npm test` doesn't exist, and no vitest/playwright
+   dependency is in `package.json`. The "60-120 randomized playouts +
+   Playwright smoke tests" mentioned below were run ad hoc inside Claude
+   Code sessions, never committed as test code, so there was nothing for
+   CI to pick up and run. Scope narrowed to what actually exists: PR #7
+   adds `.github/workflows/ci.yml` running `npm ci` + `npm run build` +
+   `npm run lint` on PRs/pushes (both verified green locally before push).
+   Committing an actual test suite (the random-playout script, a
+   Playwright smoke test) so CI has something beyond build+lint to run is
+   a separate, not-yet-started follow-up — see item 1b below.
+   Also found not to generalize: **kakeibo has no root `package.json`**
+   (GAS + Supabase Edge Functions + SQL migrations, no npm project) and
+   **kakeibo-liff has no build system at all** (static HTML files, no
+   package.json). Neither fits an npm-based reusable CI workflow; each
+   needs its own separate design if/when picked up. User decided
+   2026-08-23 to proceed with GAME only for now.
+
+1b. [ ] **Commit an actual test suite for GAME** (blocks CI from covering
+    more than build+lint)
+    Turn the ad hoc "60-120 randomized playouts" and Playwright smoke
+    checks that have been run inline in sessions into real committed test
+    files (e.g. a `scripts/random-playout.ts` + a `tests/` dir with a
+    Playwright config), then add a corresponding step to PR #7's
+    `ci.yml`. Not started; no test framework dependency exists in
+    `package.json` yet.
 
 2. [ ] **Code a PR-merge-boundary `/clear` nudge, mirroring the five-hour
    notification mechanism** (this repo, `hooks/archive-turn.py`)
