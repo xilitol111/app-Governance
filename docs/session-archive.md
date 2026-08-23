@@ -1316,3 +1316,32 @@ PR [xilitol111/app-Governance#11](https://github.com/xilitol111/app-Governance/p
 **2026-08-23T14:22:37.837Z**
 
 PR #10は既にマージ済み(前回確認済み)のため、この古いチェックイントリガーは削除しました。現在監視中はkakeibo#7とapp-Governance#11のみで、こちらは1時間後(15:19 UTC)に再確認予定です。特に対応は不要です。
+
+---
+<!-- uuid:5ca8e856-19b3-4a90-834d-227771b04d80 -->
+**2026-08-23T15:10:03.917Z**
+
+残タスクは`docs/plans/token-consumption-followups.md`に4件残っています(優先度順)。
+
+## item 1b: GAMEの実テストスイートをコミットする
+現状GAME#7でCIはbuild+lintのみをカバー。以前セッション内で実行していた「ランダムプレイアウト60〜120回」「Playwrightスモークテスト」はコード化・コミットされたことがなく、CIが実行できるテストが存在しない。
+- `scripts/random-playout.ts`のようなランダムプレイアウトスクリプトを新規作成
+- Playwright設定(`tests/`ディレクトリ、`playwright.config.ts`)を追加
+- `package.json`にテストフレームワーク依存を追加
+- CI(`ci.yml`)にテスト実行ステップを追加
+→ GAMEの実コードを見ないと具体的な実装方針が決められないため、着手する場合はGAMEの現在の構造(ゲームロジックのエントリポイント等)を先に調査する必要があります。
+
+## item 4: GAME自身のCLAUDE.mdを先手でケアする
+まだ肥大化していないが「Known simplifications」節にバッチ完了ログが増え始めている。`docs/DEVLOG.md`(kakeiboと同じパターン)を先に切っておく、比較的小さい機械的作業。
+
+## item 5: kakeibo環境でhookが実際に動作しているか確認
+kakeiboに`docs/five-hour-samples.jsonl`・`docs/session-archive.md`が存在するか確認するだけの調査タスク。
+
+## item 6: GAMEのセグメント4異常の再検証
+`session_id`付きデータが数日分溜まってから着手すべき項目(今はまだデータ不足で着手不可)。
+
+---
+
+**推奨順**: item 5(確認のみ・数分で終わる) → item 4(小さい機械的作業) → item 1b(GAMEのコード調査が必要、最も工数が大きい)。item 6は時期尚早のためスキップ。
+
+どれから進めますか、それとも一区切りにしますか？
