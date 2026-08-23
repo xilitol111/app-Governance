@@ -1166,3 +1166,22 @@ Phase 1〜3で見つかった「Actions有効化」「branch protection」等、
 ---
 
 まずPhase 0から着手してよければ、**どちらのリポジトリから先に進めるか**教えてください(GAMEが最もトークン消費インパクトが大きいと以前の分析で出ているので、GAME優先を推奨します)。
+
+---
+<!-- uuid:be0184c2-82fe-4640-964f-97c0e1b18693 -->
+**2026-08-23T12:49:00.807Z**
+
+add_repoツールを使って、GAME・kakeiboそれぞれのowner/repo名を指定して呼び出すだけです。事前のcurl/gh確認などは不要で(private repoは404を返すことがあり誤誘導になるため)、直接呼び出します。
+
+呼び出し方の例:
+
+```
+add_repo(owner="xilitol111", repo="GAME", access="push")
+add_repo(owner="xilitol111", repo="kakeibo", access="push")
+```
+
+- `access`は`"read"`(fetch/clone・閲覧のみ)か`"push"`(commit・PR作成まで行う)を選べます。今回はワークフローファイルをpushしてPRを作る想定なので`"push"`が必要です。
+- 呼び出すとクローン用のコマンドが返るので、それを実行してcloneした後、`register_repo_root`でそのディレクトリを登録すれば、そのリポジトリのCLAUDE.md/skillsも読み込まれるようになります。
+- リポジトリ名が正確に分からない場合は`list_repos(query="GAME")`のように検索できます。
+
+GAMEから始める前提で進めてよければ、実際に`add_repo`を呼び出します。進めてよいですか？
