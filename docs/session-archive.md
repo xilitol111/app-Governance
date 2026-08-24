@@ -1599,3 +1599,34 @@ Mutation Testingの導入自体は正しい判断ですが、フルスイート�
 ---
 
 **結論**: 設計思想(Authority BoundaryとVerification Boundaryの分離)は堅牢で、方針として維持すべきです。ただし「誰が承認するか」を細部(特にTest Contract個別ケースの扱い)まで詰めると、人間/上位AIのレビュー負荷がローカルLLM導入前とほぼ変わらなくなるリスクがあります。承認の粒度をInvariant/バッチ単位に引き上げること(改善点1)が、このアーキテクチャがトークン削減という当初目的を実際に達成できるかどうかを左右する、最も重要な修正点です。
+
+---
+<!-- uuid:9dcf6c92-94d7-40d8-8b81-f00e27987ef7 -->
+**2026-08-24T15:07:50.468Z**
+
+検索結果の一部(Qwen3.6-27B・GLM-4.7-Flash等の具体的ベンチマーク数値)は聞き慣れないSEO寄りのブログ複数から出ており、実在・数値の正確性ともに裏付けが弱いため参考程度に留めます。一方、Qwen2.5-Coder-14B / DeepSeek-Coder-V2-Lite / Qwen2.5-Coder-32Bの比較は複数ソースで一致しており、このセッションで既に実測確認済みのGemma 4 26B-A4Bの数値とも整合するため、これを軸に選定します。
+
+## 結論: 各役割でのモデル・量子化選定
+
+| 役割 | モデル | 量子化 | 実VRAM目安 | 選定理由 |
+|---|---|---|---|---|
+| **通常実装(最頻出・速度最優先)** | **Qwen2.5-Coder-14B-Instruct** | **Q4_K_M** | 約8.5〜9GB(+KVキャッシュ) | dense 14Bで推論が予測しやすく、10GB VRAMにほぼ収まる。MoEのDeepSeek-Coder-V2-Lite(16B/active2.4B)より実務寄りベンチマーク(SWE-bench/LiveCodeBench)で優位という比較が複数ソースで一致 |
+| **仕様分析・診断(頻度中程度)** | Gemma 4 26B-A4B | Q4_K_XL/Q4_K_M | 約15GB(要CPUオフロード) | 既にこのセッションで実在・性能を確認済み(25.2B/active3.8B、LiveCodeBench v6 77.1%)。頻度が低く多少のオフロード遅延は許容範囲 |
+| **難問のSecond Opinion(稀)** | Qwen2.5-Coder-32B-Instruct | Q4_K_M | 約19〜20GB(要CPUオフロード) | 呼び出し頻度が低いため遅くても許容。品質を落とすとフォールバックの意味が薄れるためQ4_K_M未満への圧縮は非推奨 |
+
+## 「通常実装」枠の選定理由(最重要・最頻出のため詳しく)
+
+- **Q4_K_Mが速度と品質のスイートスポット**: Q5_K_M/Q8_0にすると10〜11GB超になりVRAM10GB環境では常時オフロードが発生し速度低下、Q3_K_M以下にすると実装ロジックの正確性が実用不足になりやすい。Q4_K_Mなら**VRAM常駐でコンテキスト長を圧迫せず、速度を落とさず質も保てるバランス点**になる
+- **DeepSeek-Coder-V2-Lite(MoE)は不採用、ただしベンチマーク対象として保持**: MoEはトークンあたりの計算量は小さい(2.4B active)がルーティングの帯域律速で期待ほど速くならない場合がある、という以前の指摘とも整合。dense 14Bの方が挙動が予測しやすく、GAME/kakeiboのような実務コードでの精度も上という比較結果が複数ソースで一致するため、現時点ではQwen14Bを既定にし、実際に手元で試して精度に不満が出た場合の代替候補としてDeepSeek-Coder-V2-Liteをベンチマーク対象にとどめる
+- **コンテキスト長は既存推奨どおり4096〜6144に抑える**: Q4_K_M(約8.5〜9GB)+KVキャッシュで10GB VRAMをフル活用する場合、8192まで広げるとオフロードが発生し速度が落ちるため、10GBカードでは控えめな値を維持するのが妥当
+
+## 上位モデルとの役割整合性の確認
+
+この選定は、前回までに固めた「14Bを事実上の既定実装モデル、32Bは診断用Second Opinionに限定」という設計方針(VRAM制約から32B常用は現実的でないという以前の実測ベース判断)とも一貫しています。改めて別モデルへ切り替える理由は今回の検索結果からは見つからず、**Qwen2.5-Coder-14B(Q4_K_M)を主力実装モデルとする現行方針の維持を推奨**します。
+
+Sources:
+- [Best Local Coding LLM in 2026: Qwen2.5-Coder vs DeepSeek-Coder-V2 vs Codestral - DEV Community](https://dev.to/jovan_chan_9500711396d4e6/best-local-coding-llm-in-2026-qwen25-coder-vs-deepseek-coder-v2-vs-codestral-45g8)
+- [Qwen 2.5-Coder vs DeepSeek Coder: Benchmark Comparison 2026 | Markaicode](https://markaicode.com/vs/qwen-2-5-coder-vs-deepseek-coder/)
+- [10GB VRAM Local LLM: The Complete Setup Guide (2026)](https://www.sitepoint.com/10gb-vram-local-llm-the-complete-setup-guide-2026/)
+- [Best Local LLM for Coding in 2026 (Self-Hosted) - Tembo.io](https://www.tembo.io/blog/best-local-llm-for-coding)
+- [Qwen2.5-Coder vs DeepSeek-Coder Local: Which Wins](https://www.promptquorum.com/power-local-llm/deepseek-vs-qwen-coding-local-2026)
