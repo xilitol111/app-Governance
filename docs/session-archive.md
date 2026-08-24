@@ -1630,3 +1630,32 @@ Sources:
 - [10GB VRAM Local LLM: The Complete Setup Guide (2026)](https://www.sitepoint.com/10gb-vram-local-llm-the-complete-setup-guide-2026/)
 - [Best Local LLM for Coding in 2026 (Self-Hosted) - Tembo.io](https://www.tembo.io/blog/best-local-llm-for-coding)
 - [Qwen2.5-Coder vs DeepSeek-Coder Local: Which Wins](https://www.promptquorum.com/power-local-llm/deepseek-vs-qwen-coding-local-2026)
+
+---
+<!-- uuid:4b0775f3-e822-423c-95f2-f5c3208e9c2c -->
+**2026-08-24T15:11:18.982Z**
+
+率直に言うと、Gemmaについては既に最新世代(Gemma 4)を優先していましたが、**Qwenについては確認不足でした**。理由を分けて説明します。
+
+## Gemmaは元々「3ではなく4」を優先していた
+
+Gemma 4は2026年4月2日リリースで、Gemma 3(2025年3月)から大幅に性能が向上しています(LiveCodeBench: 29.1%→80.0%、BigBench Extra Hard: 19.3%→74.4%)。前回までの推奨(Gemma 4 26B-A4B)は、この最新世代を最初から選んでいたので、ここは意図通りです。
+
+## Qwenは「2.5」を推奨してしまっていた ― これは検索不足が原因
+
+前回の検索クエリがQwen2.5-Coder vs DeepSeek-Coder-V2-Liteという**旧世代同士の比較軸**に寄っていたため、Qwen3世代のCoderモデルの存在を確認していませんでした。改めて調べると:
+
+- **Qwen3-Coder**という名前を冠したモデルは、**30B-A3B(MoE、Q4で約17〜18GB)**と**480B-A35B(論外のサイズ)**の2種類のみで、どちらも10GB VRAMには収まりません
+- 10GB VRAMに収まるサイズ帯では、コード特化ではない**汎用Qwen3-14B(dense、Q4で約8.3GB)**は存在しますが、Qwen2.5-Coder-14Bのようなコード特化ファインチューニングを受けているかは検索結果から確認できませんでした
+- 世代間の底上げ(Qwen3-32BがQwen2.5-72B相当に匹敵するという情報)から「Qwen3-14B(汎用)がQwen2.5-Coder-14B(コード特化)を上回る」と推測することはできますが、**コードタスクに絞った直接比較のベンチマークは見つかりませんでした**。ここは記憶で断定せず、確認できた事実の範囲でお伝えします
+
+## 結論: 推奨の訂正
+
+「通常実装」枠は、**Qwen2.5-Coder-14B(Q4_K_M)を維持**しつつ、**汎用Qwen3-14B(Q4)も同一VRAM帯で動くベンチマーク候補として追加**するのが正確な現状です。「バージョン3以降のCoderモデル」は今回の環境(10GB VRAM)には物理的に収まらないため優先しなかった、というのが正しい理由です。一方でGemmaは既に最新世代を選択済みでした。
+
+Sources:
+- [Gemma 4 Complete Guide 2026, Architecture, Benchmarks, Deployment and more](https://dev.to/aniruddhaadak/gemma-4-complete-guide-2026-architecture-benchmarks-deployment-3en9)
+- [Google Gemma 4 Review: How a 31B Open Model Beats...](https://www.startuphub.ai/ai-news/ai-research/2026/google-gemma-4-review-2026)
+- [Run Qwen3-Coder 100% Locally with Ollama (Hardware Requirements)](https://inventivehq.com/blog/run-qwen3-coder-locally-ollama)
+- [Qwen 3 & 3.5 GPU Requirements (2026) — VRAM by Variant](https://willitrunai.com/blog/qwen-3-gpu-requirements)
+- [Qwen 3.6 27B Local Setup Guide 2026](https://www.promptquorum.com/local-llms/qwen-local-deployment-guide-2026)
