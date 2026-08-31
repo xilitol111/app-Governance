@@ -201,6 +201,33 @@ curl -fsSL https://raw.githubusercontent.com/xilitol111/app-Governance/main/scri
 (SSH鍵やgh CLIログインなど)が別途必要——なければ収集自体は止まらず継続するが、pushだけが
 silentlyスキップされ、データがそのマシンの外に出ない。
 
+**WSL(Windows Subsystem for Linux)**: WSL内部は通常のLinux環境なので、上記`install-local.sh`が
+そのまま使える(WSLのシェルから実行する)。
+
+**ネイティブWindows(PowerShell/cmd、WSLなし)**: bashスクリプトはshebangに対応していないため
+そのままでは動かず、フック呼び出し自体もPOSIXシェル経由ではない前提で別スクリプトを用意している:
+
+```powershell
+irm https://raw.githubusercontent.com/xilitol111/app-Governance/main/scripts/install-windows.ps1 | iex
+```
+
+`scripts/install-windows.ps1`は`hooks/session-start.py`(後述)・`archive-turn.py`・
+`session-end.py`を`%USERPROFILE%\.claude\hooks\`に配置し、`%USERPROFILE%\.claude\settings.json`に
+Windows向けのコマンド形式(`~`展開に頼らず絶対パスを直接書き込む)で登録する。要`git`(Git for Windows)。
+
+`hooks/session-start.py`は、既存の`hooks/session-start.sh`(bash製、クラウド/WSL/macOS向けで
+そのまま維持)とは別に用意した**標準ライブラリのみのPython版**。ネイティブWindows上でshebangに
+頼らず`python`から直接実行できるよう、同じ処理(CLAUDE.md・フック本体の再取得、CLAUDE.mdの
+更新検知、直近コミット・`session-archive.md`末尾の表示)を`urllib`/`hashlib`で書き直したもの。
+`archive-turn.py`・`session-end.py`は元から純粋なPythonなので変更不要——Windows対応のために
+新規作成が必要だったのは`session-start.sh`の代替のみ。
+
+**未検証であることの明記**: 上記Windows対応は実機での動作確認ができていない(このセッション自体は
+クラウドのLinux環境で動いており、Windowsマシンに直接アクセスできないため)。Claude Code CLIが
+ネイティブWindows上でフックコマンドをどう起動するか(shebang非対応・インタプリタを明示指定する
+必要がある、という一般的な理解に基づいて実装)を実機で厳密に検証できていない。実行して何か
+おかしければ(フックが発火しない、エラーが出る等)報告してほしい。
+
 claude.aiの通常チャット/Desktopアプリ(Claude Codeではない方)の利用量は、hooksや公開APIが
 存在しないため自動収集の対象外(2026-08-31時点で技術的に不可能と判断)。
 

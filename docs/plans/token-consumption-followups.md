@@ -144,7 +144,24 @@ actually needed.
    merge converged on the first retry and both writers ended up with the
    full set of rows.
 
-9. [ ] **Re-check the segment-4-shaped anomaly once session_id data accumulates**
+9. [ ] **Native-Windows install path — needs real-machine verification**
+   Added 2026-08-31: `hooks/session-start.py` (pure-Python twin of
+   `hooks/session-start.sh`, since a bash shebang script won't run on
+   native Windows without Git Bash) and `scripts/install-windows.ps1`
+   (PowerShell installer, bakes absolute paths + interpreter into each
+   hook's `command` string rather than relying on `~`/env-var expansion
+   inside Claude Code's hook runner). `archive-turn.py`/`session-end.py`
+   needed no changes — already pure Python. **Unverified against a real
+   Windows machine** — this session runs in a cloud Linux environment with
+   no way to test PowerShell or an actual native-Windows Claude Code hook
+   invocation; the implementation follows the general understanding that
+   native Windows doesn't honor Unix shebangs and needs an explicit
+   interpreter in the hook command, but that hasn't been confirmed against
+   primary Claude Code documentation. Needs a real Windows user to run
+   `scripts/install-windows.ps1` and report back whether hooks actually
+   fire and CLAUDE.md loads correctly.
+
+10. [ ] **Re-check the segment-4-shaped anomaly once session_id data accumulates**
    GAME's 8/22 segment 4 (12:52-13:23) showed a ~10x-higher growth rate than
    every other segment (+1.05億 tokens in the first 10 minutes) — suspected
    to be a resumed session's pre-existing transcript history getting counted
