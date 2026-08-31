@@ -1278,3 +1278,15 @@ Remaining open items in the followups doc: 1b (commit an actual GAME test suite)
 **2026-08-23T13:20:08.379Z**
 
 PR #10 has no actionable activity yet (just subscription confirmations, and this repo has no CI). I've scheduled a check-in in an hour and will keep watching quietly.
+
+---
+<!-- uuid:d2143912-57cc-4028-a618-35ca4963e8ba -->
+**2026-08-31T06:12:14.374Z**
+
+Draft PR opened and I'll watch it: [PR #12](https://github.com/xilitol111/app-Governance/pull/12).
+
+**What this gives you:**
+- **収集**: `hooks/archive-turn.py` は既存の per-turn 累積スナップショット(`five-hour-samples.jsonl`)に加え、`docs/token-usage-events.jsonl` に API呼び出し単位(assistant message ごと)で `input/output/cache_creation/cache_read` トークン数とモデル名を記録するようになりました — これが今取れる最も細かい粒度です。
+- **可視化**: `scripts/generate-usage-dashboard.py` を実行すると、そのjsonlから自己完結型のHTMLダッシュボード(日別トレンド、セッション別・モデル別内訳)を生成できます。外部サービス不要、依存ライブラリなし。見たいときに実行してArtifactとして公開すれば「一目で確認」できます。
+
+Since this session hasn't had a Stop hook fire yet, `token-usage-events.jsonl` doesn't have real data yet — it'll start filling in from this turn onward. Next time you want to check the dashboard, just ask me to run `scripts/generate-usage-dashboard.py` and publish it.
