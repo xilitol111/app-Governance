@@ -1290,3 +1290,9 @@ Draft PR opened and I'll watch it: [PR #12](https://github.com/xilitol111/app-Go
 - **可視化**: `scripts/generate-usage-dashboard.py` を実行すると、そのjsonlから自己完結型のHTMLダッシュボード(日別トレンド、セッション別・モデル別内訳)を生成できます。外部サービス不要、依存ライブラリなし。見たいときに実行してArtifactとして公開すれば「一目で確認」できます。
 
 Since this session hasn't had a Stop hook fire yet, `token-usage-events.jsonl` doesn't have real data yet — it'll start filling in from this turn onward. Next time you want to check the dashboard, just ask me to run `scripts/generate-usage-dashboard.py` and publish it.
+
+---
+<!-- uuid:31fd0776-8867-42b4-b87d-99b427402816 -->
+**2026-08-31T06:12:34.237Z**
+
+Just subscription-confirmation echoes — no real CI (this repo has none) or review activity yet on [PR #12](https://github.com/xilitol111/app-Governance/pull/12). Nothing to act on; I've scheduled a check-in in an hour and will keep watching quietly.
