@@ -7,6 +7,11 @@
 # has no such field and this session cannot reach a user's local filesystem
 # to do it for them.
 #
+# This script needs a real bash — fine for macOS/Linux, and for WSL (run it
+# from inside your WSL shell). On NATIVE Windows (PowerShell/cmd, no WSL, no
+# Git Bash), use scripts/install-windows.ps1 instead — a bash script with a
+# shebang won't run there. See README.md's "別マシン/別環境で使う場合" section.
+#
 # Usage (run once, on the machine you want covered):
 #   curl -fsSL https://raw.githubusercontent.com/xilitol111/app-Governance/main/scripts/install-local.sh | bash
 #
