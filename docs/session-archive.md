@@ -1352,3 +1352,9 @@ irm https://raw.githubusercontent.com/xilitol111/app-Governance/main/scripts/ins
 ```
 
 実行して問題(フックが発火しない、エラーが出るなど)があれば教えてください。それをもとに修正します。
+
+---
+<!-- uuid:bfdc912b-cee6-4382-bc24-09f29e4c4c53 -->
+**2026-08-31T07:06:57.195Z**
+
+PR #14は監視継続中です。
