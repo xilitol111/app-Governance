@@ -1316,3 +1316,18 @@ Pushed to PR #12.
 - `python3 scripts/generate-usage-dashboard.py` を実行すればいつでも最新データで再生成できます。実データはこのターンからの蓄積分のみで、PR #12がマージされるまでは他リポジトリには反映されません。
 
 PR #12は監視継続中です。マージのタイミングはお任せします。
+
+---
+<!-- uuid:f3b7f098-d826-4741-add1-f71ca68ae77a -->
+**2026-08-31T06:54:50.562Z**
+
+Draft PR opened and I'm watching it: [PR #13](https://github.com/xilitol111/app-Governance/pull/13)
+
+**実装内容:**
+- **アカウント全体での収集**: どのプロジェクトで作業していても、固定パスの専用クローン(`~/.claude/governance-usage-mirror`)経由で`token-usage-events.jsonl`に集約されるようになりました(app-Governance自身で作業中はそのcwdをそのまま使い、二重クローンを避けます)。各行に`project`ラベルが付くので、後でプロジェクト別に見分けられます。
+- **複数書き手対応**: 最初`git rebase`で試したところ、短いファイルへの同時追記が本物のコンフリクトとして検出され、再試行しても収束しない現象を実際に再現・確認しました。そこで`message_id`をキーとした内容レベルのunionマージに切り替え、同じシナリオで確実に収束することを検証しました。
+- **ローカルCLI用インストールスクリプト**: `scripts/install-local.sh` を用意しました。ローカルマシンで1回実行するだけです。
+- **ダッシュボード**: プロジェクト別のグループ化を追加しました。
+- **claude.ai通常チャット/Desktopアプリ**: 合意通り対象外としました。
+
+PR #13は監視継続します。マージ後、`scripts/install-local.sh`をローカルマシンで実行していただければ、ローカルCLIの収集も有効になります。
