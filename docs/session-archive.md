@@ -1331,3 +1331,9 @@ Draft PR opened and I'm watching it: [PR #13](https://github.com/xilitol111/app-
 - **claude.ai通常チャット/Desktopアプリ**: 合意通り対象外としました。
 
 PR #13は監視継続します。マージ後、`scripts/install-local.sh`をローカルマシンで実行していただければ、ローカルCLIの収集も有効になります。
+
+---
+<!-- uuid:c128c11f-b13f-45a6-90dc-1383c89fca02 -->
+**2026-08-31T06:55:03.446Z**
+
+PR #13は監視継続中です。特に対応が必要な事項はありません。
