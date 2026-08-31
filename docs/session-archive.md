@@ -1337,3 +1337,18 @@ PR #13は監視継続します。マージ後、`scripts/install-local.sh`をロ
 **2026-08-31T06:55:03.446Z**
 
 PR #13は監視継続中です。特に対応が必要な事項はありません。
+
+---
+<!-- uuid:7a7c71fa-ac4d-4b53-b076-515005f3da0a -->
+**2026-08-31T07:06:45.012Z**
+
+Draft PR opened and watching: [PR #14](https://github.com/xilitol111/app-Governance/pull/14)
+
+**重要な注意点**: ネイティブWindows対応(`hooks/session-start.py`・`scripts/install-windows.ps1`)は、実機での動作確認ができていません。このセッション自体はクラウドのLinux環境で動いており、PowerShellや実際のWindows上でのフック起動を直接検証する手段がないためです。実装は「ネイティブWindowsはshebang非対応で、フックコマンドにインタプリタを明示指定する必要がある」という一般的な理解に基づいていますが、公式ドキュメントでの一次確認はできていません(調査エージェントも専用ドキュメントページを見つけられませんでした)。
+
+**マージ後に実行していただくコマンド**(PowerShellで1回):
+```powershell
+irm https://raw.githubusercontent.com/xilitol111/app-Governance/main/scripts/install-windows.ps1 | iex
+```
+
+実行して問題(フックが発火しない、エラーが出るなど)があれば教えてください。それをもとに修正します。
