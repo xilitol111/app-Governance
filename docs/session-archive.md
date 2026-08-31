@@ -1278,3 +1278,41 @@ Remaining open items in the followups doc: 1b (commit an actual GAME test suite)
 **2026-08-23T13:20:08.379Z**
 
 PR #10 has no actionable activity yet (just subscription confirmations, and this repo has no CI). I've scheduled a check-in in an hour and will keep watching quietly.
+
+---
+<!-- uuid:d2143912-57cc-4028-a618-35ca4963e8ba -->
+**2026-08-31T06:12:14.374Z**
+
+Draft PR opened and I'll watch it: [PR #12](https://github.com/xilitol111/app-Governance/pull/12).
+
+**What this gives you:**
+- **収集**: `hooks/archive-turn.py` は既存の per-turn 累積スナップショット(`five-hour-samples.jsonl`)に加え、`docs/token-usage-events.jsonl` に API呼び出し単位(assistant message ごと)で `input/output/cache_creation/cache_read` トークン数とモデル名を記録するようになりました — これが今取れる最も細かい粒度です。
+- **可視化**: `scripts/generate-usage-dashboard.py` を実行すると、そのjsonlから自己完結型のHTMLダッシュボード(日別トレンド、セッション別・モデル別内訳)を生成できます。外部サービス不要、依存ライブラリなし。見たいときに実行してArtifactとして公開すれば「一目で確認」できます。
+
+Since this session hasn't had a Stop hook fire yet, `token-usage-events.jsonl` doesn't have real data yet — it'll start filling in from this turn onward. Next time you want to check the dashboard, just ask me to run `scripts/generate-usage-dashboard.py` and publish it.
+
+---
+<!-- uuid:31fd0776-8867-42b4-b87d-99b427402816 -->
+**2026-08-31T06:12:34.237Z**
+
+Just subscription-confirmation echoes — no real CI (this repo has none) or review activity yet on [PR #12](https://github.com/xilitol111/app-Governance/pull/12). Nothing to act on; I've scheduled a check-in in an hour and will keep watching quietly.
+
+---
+<!-- uuid:d57ddc99-2815-41b1-8305-3bf263c25a6f -->
+**2026-08-31T06:23:34.146Z**
+
+Pushed to PR #12.
+
+**まとめ:**
+
+**① データ収集の堅牢性(最重要ポイント)**
+- 既存の `hooks/archive-turn.py`(Stopフック=毎ターン発火)に加えて、API呼び出し単位で `docs/token-usage-events.jsonl` に記録するようにしました。これが今取れる最も細かい粒度です。
+- 既存の仕組みで**毎ターン自動コミット・push**されるため、コンテナが不測の事態で失われてもロスしません。
+- アカウントに存在する環境は `kakeibo` の1つだけで、そこには自己修復型のSetup Scriptが既に登録済み(毎セッション開始時にフックを再登録)——つまり「どのセッションでも確実に収集を強制する」という要件は、**既存の設計で既に構造的に満たされています**。実際に `xilitol111/kakeibo` リポジトリを確認したところ、`five-hour-samples.jsonl` と `session-archive.md` が既に存在し、フックが正しく発火していることを確認しました。
+- 唯一の注意点:今回追加した `token-usage-events.jsonl` の収集ロジックは、この app-Governance の `main` にマージされて初めて他のセッション(GAME/kakeiboなど)にも反映されます([PR #12](https://github.com/xilitol111/app-Governance/pull/12) がまだ未マージ)。
+
+**② ダッシュボード(おまけ扱い)**
+- 日本語UI化、グラフ中心の表示、日次/週次/月間の期間切替、セッション別/モデル別/全体のグループ切替、列見出しクリックでのソートに対応しました。プレビュー: https://claude.ai/code/artifact/33b57df0-68e8-4ceb-aa06-2c645125cadf (今はサンプルデータ表示中)
+- `python3 scripts/generate-usage-dashboard.py` を実行すればいつでも最新データで再生成できます。実データはこのターンからの蓄積分のみで、PR #12がマージされるまでは他リポジトリには反映されません。
+
+PR #12は監視継続中です。マージのタイミングはお任せします。

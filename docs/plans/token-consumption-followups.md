@@ -76,17 +76,46 @@ actually needed.
    5b-i...). Carve out a `docs/DEVLOG.md` (or a `docs/roadmap-log.md`) for
    batch-completion write-ups now, before it grows into kakeibo's problem.
 
-5. [ ] **Confirm the governance hooks are actually live in kakeibo sessions**
-   kakeibo's repo currently has no `docs/five-hour-samples.jsonl` and no
-   `docs/session-archive.md` at all, unlike GAME. Unconfirmed whether this
-   is because no kakeibo session has run since the hook mechanism went live
-   account-wide, or because something about that environment/session setup
-   isn't invoking the hooks against this repo's working directory. Needs
-   checking the next time actual work happens in kakeibo — if hooks aren't
-   firing there, kakeibo usage stays invisible to all of the above analysis
-   indefinitely.
+5. [x] **Confirm the governance hooks are actually live in kakeibo sessions**
+   — confirmed 2026-08-31: `xilitol111/kakeibo`'s `docs/` now has both
+   `five-hour-samples.jsonl` and `session-archive.md` (checked via
+   `get_file_contents`), so the hooks are firing there. Root cause of the
+   earlier gap was simply "no kakeibo session had run yet since the
+   mechanism went live", not a broken hook. Also confirmed only one
+   Claude Code environment exists on this account (`kakeibo`,
+   `env_01CH8G8RmBJwUGCWuLdsJFGj`) and it already carries the
+   self-healing Setup Script (see README's "仕組み" section) that
+   re-registers SessionStart/Stop/SessionEnd hooks into
+   `~/.claude/settings.json` every session regardless of which repo's
+   directory that session is working in — so enforcement across "any
+   session" is structurally already satisfied as long as future sessions
+   keep using this one environment. The one live dependency: a session
+   only picks up new hook logic (e.g. item 6 below's
+   `token-usage-events.jsonl` collection, added 2026-08-31) once
+   `session-start.sh`'s per-session `curl` re-fetch pulls it from this
+   repo's `main` — i.e. only after the PR carrying that change is merged.
 
-6. [ ] **Re-check the segment-4-shaped anomaly once session_id data accumulates**
+6. [x] **Per-API-call token usage collection + dashboard** — added
+   2026-08-31, PR #12. `hooks/archive-turn.py` now also appends
+   `docs/token-usage-events.jsonl`, one row per actual API call
+   (assistant `message.id`) with its own `input_tokens`/`output_tokens`/
+   `cache_creation_input_tokens`/`cache_read_input_tokens`/`model` —
+   finer than `five-hour-samples.jsonl`'s per-turn cumulative
+   `cache_read` snapshot, which is unchanged and kept as-is (it still
+   drives the five-hour interval nudge). Committed + pushed every turn
+   via the existing `TRACKED_FILES` mechanism, so it inherits the same
+   loss-resistance guarantee as `session-archive.md`. Dedup is against
+   the jsonl file's own contents, so re-scanning the full transcript on
+   every Stop firing never double-counts a call. `scripts/generate-
+   usage-dashboard.py` reads it and renders a self-contained, Japanese-
+   language, interactive HTML report (day/week/month period toggle,
+   session/model/overall group-by, sortable breakdown table, stacked
+   trend chart) with no server and no external JS dependency — publish
+   the output as an Artifact whenever a human wants to look. This is
+   explicitly a read-only convenience layer on top of the jsonl, not
+   where durability lives.
+
+7. [ ] **Re-check the segment-4-shaped anomaly once session_id data accumulates**
    GAME's 8/22 segment 4 (12:52-13:23) showed a ~10x-higher growth rate than
    every other segment (+1.05億 tokens in the first 10 minutes) — suspected
    to be a resumed session's pre-existing transcript history getting counted
