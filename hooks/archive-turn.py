@@ -115,6 +115,21 @@ a bash `gh pr merge`) since that's the documented, enforced path for this
 account's GitHub operations. If both this and the five-hour interval nudge
 fire on the same turn, their reasons are concatenated into one block message
 — Stop hooks only get one `reason` field per invocation.
+
+Per-API-call usage events (2026-08-31): five-hour-samples.jsonl only ever
+recorded one thing (cumulative cache_read_input_tokens) at one granularity
+(per Stop hook fire, i.e. per turn). For a usage-analysis dashboard, that's
+too coarse — a single turn can span several tool-round-trip API calls, each
+with its own model, and it drops every other usage field (input_tokens,
+output_tokens, cache_creation_input_tokens) entirely. Added
+docs/token-usage-events.jsonl via collect_usage_events/append_usage_events:
+one row per distinct assistant message.id (= one row per actual API call),
+carrying the full usage breakdown and model for that call specifically, not
+a running total. Dedup is against the file's own contents (not an in-memory
+per-session set) since the same transcript gets rescanned from the start on
+every turn — this is what makes it safe to append-only across a whole
+session's worth of Stop hook firings without ever double-counting a call.
+See scripts/generate-usage-dashboard.py for the reader/report side.
 """
 
 import json
@@ -128,6 +143,7 @@ THRESHOLD_TOKENS = 5_000_000
 TRACKED_FILES = [
     os.path.join("docs", "session-archive.md"),
     os.path.join("docs", "five-hour-samples.jsonl"),
+    os.path.join("docs", "token-usage-events.jsonl"),
 ]
 
 
@@ -322,6 +338,84 @@ def append_cache_read_sample(lines, cwd, session_id):
             "session_id": session_id,
         }) + "\n")
     return total
+
+
+def collect_usage_events(lines):
+    """One entry per distinct API call (assistant message.id) in the
+    transcript, each carrying its own (non-cumulative) usage breakdown and
+    model — the finest granularity the transcript actually offers, since a
+    single turn can span several tool-round-trip API calls and each already
+    reports its own usage independently. Deduped by message.id for the same
+    reason cumulative_cache_read is (streaming logs each message multiple
+    times); keeps the last occurrence, which carries the final usage numbers
+    for that call.
+    """
+    by_id = {}
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            obj = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if obj.get("type") != "assistant":
+            continue
+        msg = obj.get("message") or {}
+        mid = msg.get("id")
+        usage = msg.get("usage") or {}
+        if not mid or not usage:
+            continue
+        by_id[mid] = {
+            "ts": obj.get("timestamp"),
+            "message_id": mid,
+            "model": msg.get("model"),
+            "input_tokens": usage.get("input_tokens"),
+            "output_tokens": usage.get("output_tokens"),
+            "cache_creation_input_tokens": usage.get("cache_creation_input_tokens"),
+            "cache_read_input_tokens": usage.get("cache_read_input_tokens"),
+        }
+    return sorted(by_id.values(), key=lambda e: e["ts"] or "")
+
+
+def append_usage_events(lines, cwd, session_id):
+    """Append any not-yet-recorded per-API-call usage events to
+    docs/token-usage-events.jsonl. Re-scans the whole transcript every turn
+    (same approach as the rest of this hook) but only writes lines for
+    message_ids not already present in the file, so re-running this on a
+    resumed/long transcript never duplicates entries. This is the fine-
+    grained companion to five-hour-samples.jsonl's per-turn cumulative
+    snapshot: one row per model API call instead of one per Stop hook fire.
+    """
+    events = collect_usage_events(lines)
+    if not events:
+        return
+
+    events_path = os.path.join(cwd, "docs", "token-usage-events.jsonl")
+    os.makedirs(os.path.dirname(events_path), exist_ok=True)
+
+    seen_ids = set()
+    if os.path.exists(events_path):
+        with open(events_path, "r", encoding="utf-8", errors="ignore") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    seen_ids.add(json.loads(line).get("message_id"))
+                except json.JSONDecodeError:
+                    continue
+
+    new_lines = []
+    for e in events:
+        if e["message_id"] in seen_ids:
+            continue
+        e = dict(e, session_id=session_id)
+        new_lines.append(json.dumps(e))
+
+    if new_lines:
+        with open(events_path, "a", encoding="utf-8") as f:
+            f.write("\n".join(new_lines) + "\n")
 
 
 def maybe_notify(total, session_id, push_status, push_detail):
@@ -626,6 +720,7 @@ def main():
 
     archive_latest_turn(lines, cwd)
     total = append_cache_read_sample(lines, cwd, session_id)
+    append_usage_events(lines, cwd, session_id)
     push_status, push_detail = commit_and_push(cwd)
     interval_reason = maybe_notify(total, session_id, push_status, push_detail)
     merge_reason = maybe_notify_pr_merge(lines, session_id)
