@@ -158,10 +158,51 @@ Claude Code運用ガイドラインの原本(source of truth)を管理するリ�
 - 通知(push/email)は静音設定。管理・削除は `list_triggers` / `delete_trigger` / `update_trigger` から行う。
 - 効果測定は未実施。実測データが取れたら`NOTES-2026-08-21-handoff.md`に追記する想定。
 
+## トークン利用状況の収集(docs/token-usage-events.jsonl)
+
+`hooks/archive-turn.py`は、five時間制限監視用の累積スナップショット(`five-hour-samples.jsonl`)
+とは別に、API呼び出し単位(assistant messageごと)で`input_tokens`/`output_tokens`/
+`cache_creation_input_tokens`/`cache_read_input_tokens`/モデル名/プロジェクト名を
+`docs/token-usage-events.jsonl`に記録する。可視化は`scripts/generate-usage-dashboard.py`
+(日本語UI、日次/週次/月間・プロジェクト/セッション/モデル別のインタラクティブなHTMLダッシュボードを
+自己完結ファイルとして生成)。
+
+**書き込み先はカレントディレクトリに依存しない**(2026-08-31〜)。今どのプロジェクトで作業していても、
+`~/.claude/governance-usage-mirror`という固定パスに常駐させたこのリポジトリ専用クローンに向けて
+書き込む(作業中の他のプロジェクトには一切手を付けない)。カレントディレクトリが既にapp-Governance
+自身のクローンである場合は、二重クローンを避けてそのまま使う。これにより、クラウド環境・ローカルPCの
+Claude Code CLIを問わず、「どのセッションでどのプロジェクトを触っていても」アカウント全体の利用状況が
+1つのファイルに集約される。
+
+**複数書き手への対応**: 上記の設計により、この1ファイルには複数のセッション(クラウド・ローカル問わず)
+が同時に書き込みうる。`git rebase`ベースのマージは短いファイルへの同時追記で本物の競合として
+検出されてしまい収束しないことを実測で確認したため採用していない。代わりに、push前に
+`message_id`をキーとした**内容レベルのunion(集合和)マージ**を行う(`sync_mirror_before_write`)。
+追記専用・IDでdedupされたファイルにとってunionはconflictが原理的に発生しない正しいマージであり、
+どのタイミングで複数の書き手が競合してもデータを失わない。
+
 ## 別マシン/別環境で使う場合
 
 この仕組みは`kakeibo`環境専用。ローカルPCや別のClaude Code環境でも同じ内容を効かせたい場合は、
 それぞれの環境で同じSetup Script(またはそれに相当する初期化手順)を個別に設定する必要がある。
+
+**ローカルのClaude Code CLI / Desktopアプリを含める場合**(2026-08-31〜): このセッション自身は
+クラウド環境で動作しており、ユーザーのローカルマシンには一切アクセスできないため、最初の1回だけ
+手動でのインストールが必要:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/xilitol111/app-Governance/main/scripts/install-local.sh | bash
+```
+
+`scripts/install-local.sh`の中身は、上記kakeibo環境のSetup Scriptと基本的に同じ内容(hooksの
+配置+`~/.claude/settings.json`への登録)を、環境Setup Scriptの代わりに直接実行できる形にしたもの。
+実行後は`session-start.sh`が毎セッション自分自身を再取得する既存の仕組みがそのまま効くため、
+再実行は不要。ただしこのマシンから`xilitol111/app-Governance`へ`git push`できる認証
+(SSH鍵やgh CLIログインなど)が別途必要——なければ収集自体は止まらず継続するが、pushだけが
+silentlyスキップされ、データがそのマシンの外に出ない。
+
+claude.aiの通常チャット/Desktopアプリ(Claude Codeではない方)の利用量は、hooksや公開APIが
+存在しないため自動収集の対象外(2026-08-31時点で技術的に不可能と判断)。
 
 **過去の既知問題(2026-08-22 解決済み)。** 当時この配布は`git clone`ベースで、
 `xilitol111/game`用の別環境で検証したところ、Setup Script自体は正しく登録されていた

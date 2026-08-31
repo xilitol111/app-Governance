@@ -115,7 +115,36 @@ actually needed.
    explicitly a read-only convenience layer on top of the jsonl, not
    where durability lives.
 
-7. [ ] **Re-check the segment-4-shaped anomaly once session_id data accumulates**
+8. [x] **Account-wide collection (local Claude Code CLI + any project, not
+   just cloud/governance-aware repos)** — added 2026-08-31. Extended item
+   6's collection so it isn't cwd-scoped anymore: `resolve_usage_mirror_dir`
+   routes `token-usage-events.jsonl` through a fixed clone of this repo at
+   `~/.claude/governance-usage-mirror` (or `cwd` directly when already
+   inside this repo), so usage is recorded no matter which project a
+   session is actually working in — cloud or local. Each row now also
+   carries a `project` label. `scripts/install-local.sh` is the one-time
+   manual step for a local machine (this session can't reach one itself);
+   `README.md`'s new "トークン利用状況の収集" and "別マシン/別環境で使う場合"
+   sections cover both. Explicitly ruled out of scope: claude.ai's plain
+   chat/Desktop app (non-Code) — no hooks or public per-user usage API
+   exist for it, confirmed with the user 2026-08-31.
+
+   Turning this into a genuinely multi-writer file (every cloud session
+   plus potentially several local machines, all racing to push the same
+   `token-usage-events.jsonl`) needed a merge strategy beyond git's own:
+   `git rebase` was tried first and proven live to deadlock — two writers
+   independently appending one line each to a *short* file produce
+   identical-context diffs, a textbook conflict even though there's no
+   real disagreement, and retrying doesn't help since nothing about the
+   conflict changes between retries. Replaced with a content-level union
+   merge keyed by `message_id` (`sync_mirror_before_write`) — conflict-free
+   by construction for an append-only, id-deduped file. Verified against a
+   synthetic two-writer race (local git repos standing in for GitHub): the
+   rebase approach left the second writer permanently stuck; the union
+   merge converged on the first retry and both writers ended up with the
+   full set of rows.
+
+9. [ ] **Re-check the segment-4-shaped anomaly once session_id data accumulates**
    GAME's 8/22 segment 4 (12:52-13:23) showed a ~10x-higher growth rate than
    every other segment (+1.05億 tokens in the first 10 minutes) — suspected
    to be a resumed session's pre-existing transcript history getting counted

@@ -4,9 +4,13 @@ docs/token-usage-events.jsonl (per-API-call granularity, see
 hooks/archive-turn.py's append_usage_events).
 
 Usage:
-    python3 scripts/generate-usage-dashboard.py [output_path]
+    python3 scripts/generate-usage-dashboard.py [output_path] [events_path]
 
-Defaults to writing docs/dashboard.html relative to this script's repo root.
+Defaults to writing docs/dashboard.html relative to this script's repo root,
+reading docs/token-usage-events.jsonl from that same repo root. Pass
+events_path explicitly to read from elsewhere instead — e.g. a local
+machine's ~/.claude/governance-usage-mirror/docs/token-usage-events.jsonl,
+when that's a separate clone from wherever this script itself lives.
 No network access, no dependencies beyond the stdlib. The Python side only
 pre-aggregates raw events down to one row per (day, session, model) — small
 enough to embed as inline JSON — and ships that to the page; all further
@@ -58,21 +62,28 @@ def day_of(ts):
 
 
 def build_rows(events):
-    """One row per (day, session_id, model), each metric summed. This is the
-    finest grain the dashboard needs client-side — day-level, since week/
-    month are just coarser client-side re-bucketings of the same rows.
+    """One row per (day, session_id, model, project), each metric summed.
+    This is the finest grain the dashboard needs client-side — day-level,
+    since week/month are just coarser client-side re-bucketings of the same
+    rows. `project` defaults to "unknown" for rows recorded before that
+    field existed (2026-08-31) or from a source that never set it.
     """
     buckets = defaultdict(lambda: defaultdict(int))
     for e in events:
-        key = (day_of(e.get("ts")), e.get("session_id") or "unknown", e.get("model") or "unknown")
+        key = (
+            day_of(e.get("ts")),
+            e.get("session_id") or "unknown",
+            e.get("model") or "unknown",
+            e.get("project") or "unknown",
+        )
         b = buckets[key]
         for m in METRICS:
             b[m] += e.get(m) or 0
         b["calls"] += 1
 
     rows = []
-    for (day, session_id, model), b in sorted(buckets.items()):
-        row = {"day": day, "session_id": session_id, "model": model, "calls": b["calls"]}
+    for (day, session_id, model, project), b in sorted(buckets.items()):
+        row = {"day": day, "session_id": session_id, "model": model, "project": project, "calls": b["calls"]}
         row.update({m: b[m] for m in METRICS})
         rows.append(row)
     return rows
@@ -299,7 +310,7 @@ function renderTable(groupRows, keyLabel, sortField, sortDir) {{
   return `<table><thead><tr>${{thead}}</tr></thead><tbody>${{rows}}</tbody></table>`;
 }}
 
-const state = {{ period: "day", group: "session_id", sortField: "total", sortDir: "desc" }};
+const state = {{ period: "day", group: "project", sortField: "total", sortDir: "desc" }};
 
 function seg(idAttr, options, current) {{
   const btns = options.map(([val, label]) =>
@@ -340,10 +351,11 @@ function render() {{
     `<div class="controls"><div class="control-group"><span class="cg-label">期間</span>${{seg("period", [["day","日次"],["week","週次"],["month","月間"]], state.period)}}</div></div>` +
     renderChart(periodBuckets) + `</section>`;
 
-  const groupLabel = state.group === "session_id" ? "セッション" : (state.group === "model" ? "モデル" : "");
+  const GROUP_LABELS = {{ session_id: "セッション", model: "モデル", project: "プロジェクト" }};
+  const groupLabel = GROUP_LABELS[state.group] || "";
   const groupRows = aggregateByGroup(ROWS, state.group === "none" ? null : state.group);
   const tableSection = `<section><h2>内訳 <span class="hint">列見出しクリックで並び替え</span></h2>` +
-    `<div class="controls"><div class="control-group"><span class="cg-label">グループ</span>${{seg("group", [["session_id","セッション別"],["model","モデル別"],["none","全体"]], state.group)}}</div></div>` +
+    `<div class="controls"><div class="control-group"><span class="cg-label">グループ</span>${{seg("group", [["project","プロジェクト別"],["session_id","セッション別"],["model","モデル別"],["none","全体"]], state.group)}}</div></div>` +
     `<div class="card">${{renderTable(groupRows, groupLabel || "区分", state.sortField, state.sortDir)}}</div></section>`;
 
   app.innerHTML = summary + chartSection + tableSection;
@@ -365,7 +377,8 @@ render();
 
 def main():
     out_path = sys.argv[1] if len(sys.argv) > 1 else os.path.join(REPO_ROOT, "docs", "dashboard.html")
-    events = load_events(EVENTS_PATH)
+    events_path = sys.argv[2] if len(sys.argv) > 2 else EVENTS_PATH
+    events = load_events(events_path)
     rows = build_rows(events)
     call_count = sum(r["calls"] for r in rows)
 

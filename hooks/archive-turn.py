@@ -130,6 +130,28 @@ per-session set) since the same transcript gets rescanned from the start on
 every turn — this is what makes it safe to append-only across a whole
 session's worth of Stop hook firings without ever double-counting a call.
 See scripts/generate-usage-dashboard.py for the reader/report side.
+
+Account-wide collection via a fixed mirror clone (2026-08-31): the above
+only ever wrote token-usage-events.jsonl into whichever project repo
+happened to be cwd — fine for cloud sessions (always some app-repo checkout)
+but useless for local Claude Code CLI usage, which spends most of its time
+in unrelated, often non-governance, sometimes non-git project directories.
+resolve_usage_mirror_dir/ensure_usage_mirror route the file through a fixed
+sync point instead: a persistent clone of this repo at
+~/.claude/governance-usage-mirror (or cwd directly, when cwd already *is*
+this repo, to avoid a redundant second checkout) — so usage gets recorded
+no matter what project a session is actually working in. Each row also
+gets a project label (project_label) so cross-project rows sharing one file
+can still be told apart.
+
+This turns the file from single-writer (one cloud environment) into
+multi-writer (every cloud session, plus potentially several local
+machines, all racing to push the same file). sync_mirror_before_write
+fetches and fast-forwards/rebases onto origin *before* this turn's own
+append, so concurrent writers converge instead of clobbering each other —
+see that function's docstring for why it's safe against ever losing an
+unpushed commit. Local installation is a one-time manual step (this
+session cannot reach a user's local machine) — see scripts/install-local.sh.
 """
 
 import json
@@ -143,8 +165,13 @@ THRESHOLD_TOKENS = 5_000_000
 TRACKED_FILES = [
     os.path.join("docs", "session-archive.md"),
     os.path.join("docs", "five-hour-samples.jsonl"),
-    os.path.join("docs", "token-usage-events.jsonl"),
 ]
+
+USAGE_EVENTS_TRACKED_FILES = [os.path.join("docs", "token-usage-events.jsonl")]
+USAGE_EVENTS_COMMIT_MESSAGE = "chore: sync token usage events [auto]"
+
+GOVERNANCE_REPO_URL = "https://github.com/xilitol111/app-Governance"
+USAGE_MIRROR_PATH = os.path.expanduser("~/.claude/governance-usage-mirror")
 
 
 def read_transcript(transcript_path):
@@ -378,20 +405,27 @@ def collect_usage_events(lines):
     return sorted(by_id.values(), key=lambda e: e["ts"] or "")
 
 
-def append_usage_events(lines, cwd, session_id):
+def append_usage_events(lines, target_dir, session_id, project):
     """Append any not-yet-recorded per-API-call usage events to
-    docs/token-usage-events.jsonl. Re-scans the whole transcript every turn
-    (same approach as the rest of this hook) but only writes lines for
-    message_ids not already present in the file, so re-running this on a
-    resumed/long transcript never duplicates entries. This is the fine-
-    grained companion to five-hour-samples.jsonl's per-turn cumulative
+    <target_dir>/docs/token-usage-events.jsonl. Re-scans the whole transcript
+    every turn (same approach as the rest of this hook) but only writes
+    lines for message_ids not already present in the file, so re-running
+    this on a resumed/long transcript never duplicates entries. This is the
+    fine-grained companion to five-hour-samples.jsonl's per-turn cumulative
     snapshot: one row per model API call instead of one per Stop hook fire.
+
+    target_dir is deliberately not always cwd (see resolve_usage_mirror_dir):
+    this file is meant to accumulate across every project a session might be
+    working in, cloud or local, so it's routed through a fixed sync point
+    rather than living inside whichever repo happens to be open. project
+    tags each row with a best-effort label for that repo, so cross-project
+    rows funneled through the same file can still be told apart.
     """
     events = collect_usage_events(lines)
     if not events:
         return
 
-    events_path = os.path.join(cwd, "docs", "token-usage-events.jsonl")
+    events_path = os.path.join(target_dir, "docs", "token-usage-events.jsonl")
     os.makedirs(os.path.dirname(events_path), exist_ok=True)
 
     seen_ids = set()
@@ -410,12 +444,159 @@ def append_usage_events(lines, cwd, session_id):
     for e in events:
         if e["message_id"] in seen_ids:
             continue
-        e = dict(e, session_id=session_id)
+        e = dict(e, session_id=session_id, project=project)
         new_lines.append(json.dumps(e))
 
     if new_lines:
         with open(events_path, "a", encoding="utf-8") as f:
             f.write("\n".join(new_lines) + "\n")
+
+
+def is_governance_repo(cwd):
+    """True when cwd's origin remote is this repo itself — in that case the
+    mirror clone would just be a redundant second checkout of the same repo,
+    so resolve_usage_mirror_dir uses cwd directly instead.
+    """
+    r = subprocess.run(
+        ["git", "remote", "get-url", "origin"], cwd=cwd, capture_output=True, text=True,
+    )
+    if r.returncode != 0:
+        return False
+    url = r.stdout.strip().lower().rstrip("/")
+    if url.endswith(".git"):
+        url = url[: -len(".git")]
+    return url.endswith("xilitol111/app-governance")
+
+
+def ensure_usage_mirror():
+    """Idempotently ensure a persistent local clone of app-Governance exists
+    at USAGE_MIRROR_PATH — a fixed sync point for token-usage-events.jsonl
+    that stays valid no matter which project's directory a given session is
+    actually working in (cloud or local). Returns True once the mirror is
+    ready to use, False on any failure (most commonly: no network right
+    now) — callers skip silently on False, same as every other failure mode
+    in this script; nothing here ever raises.
+    """
+    if os.path.isdir(os.path.join(USAGE_MIRROR_PATH, ".git")):
+        return True
+    os.makedirs(os.path.dirname(USAGE_MIRROR_PATH), exist_ok=True)
+    r = subprocess.run(
+        ["git", "clone", "--depth", "50", GOVERNANCE_REPO_URL, USAGE_MIRROR_PATH],
+        capture_output=True, text=True,
+    )
+    return r.returncode == 0 and os.path.isdir(os.path.join(USAGE_MIRROR_PATH, ".git"))
+
+
+def resolve_usage_mirror_dir(cwd):
+    if is_governance_repo(cwd):
+        return cwd
+    return USAGE_MIRROR_PATH if ensure_usage_mirror() else None
+
+
+def project_label(cwd):
+    """Best-effort short label for the project a session is actually working
+    in, since usage rows from many different projects now all funnel through
+    the same shared file. Prefers the git repo's top-level directory name
+    (stable across clone locations); falls back to cwd's own basename for a
+    non-git working directory.
+    """
+    r = subprocess.run(
+        ["git", "rev-parse", "--show-toplevel"], cwd=cwd, capture_output=True, text=True,
+    )
+    top = r.stdout.strip() if r.returncode == 0 and r.stdout.strip() else cwd
+    return os.path.basename(top.rstrip("/")) or "unknown"
+
+
+def default_branch_of(cwd):
+    def run(*args):
+        return subprocess.run(args, cwd=cwd, capture_output=True, text=True)
+
+    default_ref = run("git", "symbolic-ref", "--short", "refs/remotes/origin/HEAD")
+    if default_ref.returncode == 0 and default_ref.stdout.strip():
+        return default_ref.stdout.strip().split("/", 1)[-1]
+    for candidate in ("main", "master"):
+        if run("git", "rev-parse", "--verify", f"origin/{candidate}").returncode == 0:
+            return candidate
+    return None
+
+
+def read_jsonl_lines(path):
+    lines = []
+    if os.path.exists(path):
+        with open(path, "r", encoding="utf-8", errors="ignore") as f:
+            for line in f:
+                line = line.strip()
+                if line:
+                    lines.append(line)
+    return lines
+
+
+def sync_mirror_before_write(mirror_dir):
+    """Fetch origin, then bring the mirror's token-usage-events.jsonl up to
+    date via a content-level union merge (keyed by message_id) rather than
+    a git line-diff merge — deliberately NOT `git rebase`/`git merge`.
+
+    Tried rebase first; it doesn't work here. Two sessions independently
+    appending one line each to a *short* file produce diffs with identical
+    context (both read as "insert 1 line right after the last existing
+    line"), which is a textbook rebase conflict even though there's no real
+    disagreement — verified live: a synthetic two-writer test against a
+    1-line seed file left the second writer permanently stuck re-hitting
+    the same conflict on every retry, never converging. An append-only file
+    deduped by message_id doesn't need git's general-purpose text merge at
+    all — a set union already IS the correct merge, and is conflict-free by
+    construction.
+
+    So instead: read origin's current file content (`git show`) and this
+    session's own not-yet-pushed local content, union them by message_id,
+    hard-reset the branch pointer to origin's tip (safe — the reset only
+    discards the *commit object*; every local-only line was already copied
+    into the union before the reset touches anything), and rewrite the file
+    with the merged result. append_usage_events then appends only this
+    turn's genuinely new rows on top, via its own separate dedup pass.
+
+    Returns False on any failure (no network, can't determine the default
+    branch, the reset itself fails) — local state is left exactly as it was
+    in every such case (the union is computed before the reset ever runs),
+    and the caller just proceeds with whatever's on disk; the next turn's
+    sync tries again from scratch.
+    """
+    def run(*args):
+        return subprocess.run(args, cwd=mirror_dir, capture_output=True, text=True)
+
+    if run("git", "fetch", "origin").returncode != 0:
+        return False
+
+    default_branch = default_branch_of(mirror_dir)
+    if not default_branch:
+        return False
+
+    events_rel = os.path.join("docs", "token-usage-events.jsonl")
+    events_path = os.path.join(mirror_dir, events_rel)
+
+    local_lines = read_jsonl_lines(events_path)
+    show = run("git", "show", f"origin/{default_branch}:{events_rel}")
+    origin_lines = [l for l in show.stdout.split("\n") if l.strip()] if show.returncode == 0 else []
+
+    by_id = {}
+    for raw in origin_lines + local_lines:
+        try:
+            obj = json.loads(raw)
+        except json.JSONDecodeError:
+            continue
+        mid = obj.get("message_id")
+        if mid:
+            by_id[mid] = raw
+    merged = list(by_id.values())
+
+    if run("git", "reset", "--hard", f"origin/{default_branch}").returncode != 0:
+        return False
+
+    os.makedirs(os.path.dirname(events_path), exist_ok=True)
+    with open(events_path, "w", encoding="utf-8") as f:
+        if merged:
+            f.write("\n".join(merged) + "\n")
+    return True
 
 
 def maybe_notify(total, session_id, push_status, push_detail):
@@ -610,7 +791,7 @@ def maybe_notify_pr_merge(lines, session_id):
     )
 
 
-def commit_and_push(cwd):
+def commit_and_push(cwd, tracked_files=None, commit_message=None):
     """Commit any new archive content, then always check/attempt push and
     report whether HEAD ends up fully synced with some remote-tracking ref
     *on the repo's actual default branch* — not just synced with some
@@ -639,21 +820,21 @@ def commit_and_push(cwd):
       detail: {"branch": ..., "default_branch": ...} when status is
         "pushed_off_default", else None.
     """
+    tracked_files = TRACKED_FILES if tracked_files is None else tracked_files
+    commit_message = commit_message or "chore: archive session transcript + usage samples [auto]"
+
     def run(*args):
         return subprocess.run(args, cwd=cwd, capture_output=True, text=True)
 
     if run("git", "rev-parse", "--is-inside-work-tree").returncode != 0:
         return "no_repo", None
 
-    existing = [f for f in TRACKED_FILES if os.path.exists(os.path.join(cwd, f))]
+    existing = [f for f in tracked_files if os.path.exists(os.path.join(cwd, f))]
     if existing:
         status = run("git", "status", "--porcelain", "--", *existing)
         if status.stdout.strip():
             run("git", "add", *existing)
-            run(
-                "git", "commit", "-m",
-                "chore: archive session transcript + usage samples [auto]",
-            )
+            run("git", "commit", "-m", commit_message)
             # Don't branch on commit's returncode — the ahead-count check
             # below is the single source of truth for push status either way.
 
@@ -720,8 +901,17 @@ def main():
 
     archive_latest_turn(lines, cwd)
     total = append_cache_read_sample(lines, cwd, session_id)
-    append_usage_events(lines, cwd, session_id)
     push_status, push_detail = commit_and_push(cwd)
+
+    mirror_dir = resolve_usage_mirror_dir(cwd)
+    if mirror_dir and sync_mirror_before_write(mirror_dir):
+        append_usage_events(lines, mirror_dir, session_id, project_label(cwd))
+        commit_and_push(
+            mirror_dir,
+            tracked_files=USAGE_EVENTS_TRACKED_FILES,
+            commit_message=USAGE_EVENTS_COMMIT_MESSAGE,
+        )
+
     interval_reason = maybe_notify(total, session_id, push_status, push_detail)
     merge_reason = maybe_notify_pr_merge(lines, session_id)
 
