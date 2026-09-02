@@ -1374,3 +1374,9 @@ Draft PR opened and watching: [PR #15](https://github.com/xilitol111/app-Governa
 **重要なバグ修正**: 直前のStop hookフィードバックで気づいたのですが、`sync_mirror_before_write`がブランチを問わず`origin/main`に対して`git reset --hard`する設計だったため、このセッション自身が作業中のfeatureブランチが途中で`origin/main`にリセットされてしまう事故が実際に発生していました。幸い、その状態でのpushが非fast-forwardとして拒否されたため実害はありませんでしたが(このhookはforce pushしない設計のため)、偶然の産物であり保証されたものではありませんでした。
 
 **修正内容**: `resolve_usage_mirror_dir`が、cwdがapp-Governanceのクローンであっても**デフォルトブランチ上にいる場合のみ**cwdを再利用するように変更。それ以外のブランチ(featureブランチ等)では、専用の固定ミラークローン側にフォールバックするため、作業中のブランチが誤ってリセットされることはなくなります。実際のリポジトリ(このfeatureブランチ)と合成リポジトリの両方(デフォルトブランチ・featureブランチ双方のケース)で検証済みです。
+
+---
+<!-- uuid:ff8ee219-9cca-476b-86a2-37323b094aa9 -->
+**2026-09-02T04:40:57.717Z**
+
+Pushed successfully. Branch `claude/token-consumption-tracking-45f7o3` is now in sync with origin — resolved a diverged-history conflict in `docs/token-usage-events.jsonl` (both sides had appended different event lines; merged as a superset with no duplicate `message_id`s) and pushed. PR #15 remains open, clean, and unaffected by unrelated files.
