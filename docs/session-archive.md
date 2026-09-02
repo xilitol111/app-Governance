@@ -1364,3 +1364,13 @@ PR #14は監視継続中です。
 **2026-08-31T14:55:58.575Z**
 
 Pushed — branch is now up to date with origin, hook should be satisfied.
+
+---
+<!-- uuid:08ae51de-6a5e-4480-9809-599ba6ac420e -->
+**2026-09-02T04:39:33.691Z**
+
+Draft PR opened and watching: [PR #15](https://github.com/xilitol111/app-Governance/pull/15)
+
+**重要なバグ修正**: 直前のStop hookフィードバックで気づいたのですが、`sync_mirror_before_write`がブランチを問わず`origin/main`に対して`git reset --hard`する設計だったため、このセッション自身が作業中のfeatureブランチが途中で`origin/main`にリセットされてしまう事故が実際に発生していました。幸い、その状態でのpushが非fast-forwardとして拒否されたため実害はありませんでしたが(このhookはforce pushしない設計のため)、偶然の産物であり保証されたものではありませんでした。
+
+**修正内容**: `resolve_usage_mirror_dir`が、cwdがapp-Governanceのクローンであっても**デフォルトブランチ上にいる場合のみ**cwdを再利用するように変更。それ以外のブランチ(featureブランチ等)では、専用の固定ミラークローン側にフォールバックするため、作業中のブランチが誤ってリセットされることはなくなります。実際のリポジトリ(このfeatureブランチ)と合成リポジトリの両方(デフォルトブランチ・featureブランチ双方のケース)で検証済みです。
