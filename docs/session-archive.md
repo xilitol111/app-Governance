@@ -1390,3 +1390,16 @@ Pushed successfully. Branch `claude/token-consumption-tracking-45f7o3` is now in
 **Bug recap**: the mirror-sync logic could reset the *actual working branch* to `origin/main` when a session was working directly inside app-Governance on a feature branch (not just the dedicated side-clone) — caught live in this session; no data reached origin only because the resulting push was rejected as non-fast-forward. Fixed by only reusing `cwd` as the sync target when it's already on the default branch.
 
 Watching PR #15 now.
+
+---
+<!-- uuid:bb063323-90b1-4f45-955a-cf7c3fcbd8ee -->
+**2026-09-02T05:44:55.848Z**
+
+Working tree is clean and in sync with `origin`. No data lost — everything is recovered from GitHub.
+
+**重要:このバグは現在も再発し続ける状態でした。** 修正はこのセッション内のリポジトリファイルには存在していましたが、実際に毎ターン動いているインストール済みフック(`~/.claude/hooks/archive-turn.py`)は`main`から再取得される仕組みのため、PR #15がまだ`main`に未マージの間は、SessionStartのたびに古い(バグ入り)版で上書きされ続け、そのバグ入りフックがこのブランチを`origin/main`へ`reset --hard`し続けていました。今回そのループを検知し、以下の対応をしました。
+
+1. インストール済みフック(`~/.claude/hooks/archive-turn.py`)を、GitHub上の修正済みバージョンで即座に上書き — 今後このセッション中の再発を止めました(ただし次回SessionStart時にまた`main`から再取得されるため、これは一時的な対処です)。
+2. ローカルのブランチを、GitHub上の安全な状態(修正込み)に復元しました。データ損失はありません。
+
+**お願い**: [PR #15](https://github.com/xilitol111/app-Governance/pull/15) を早めにマージしていただけますか。マージされるまでは、新しいセッションが始まるたびにこの問題が再発しうる状態です。
