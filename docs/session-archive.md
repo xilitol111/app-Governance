@@ -1380,3 +1380,13 @@ Draft PR opened and watching: [PR #15](https://github.com/xilitol111/app-Governa
 **2026-09-02T04:40:57.717Z**
 
 Pushed successfully. Branch `claude/token-consumption-tracking-45f7o3` is now in sync with origin — resolved a diverged-history conflict in `docs/token-usage-events.jsonl` (both sides had appended different event lines; merged as a superset with no duplicate `message_id`s) and pushed. PR #15 remains open, clean, and unaffected by unrelated files.
+
+---
+<!-- uuid:97df6943-96d3-4ec1-9977-3ee75ff3e989 -->
+**2026-09-02T05:43:10.409Z**
+
+[PR #15](https://github.com/xilitol111/app-Governance/pull/15) already existed with the correct fix from before the context reset; I've reconciled a divergence that appeared (auto-sync commits had drifted between local and origin, with one real merge conflict in `token-usage-events.jsonl` resolved via the same union-by-`message_id` logic the hook itself uses) and pushed. The PR's head now reflects everything.
+
+**Bug recap**: the mirror-sync logic could reset the *actual working branch* to `origin/main` when a session was working directly inside app-Governance on a feature branch (not just the dedicated side-clone) — caught live in this session; no data reached origin only because the resulting push was rejected as non-fast-forward. Fixed by only reusing `cwd` as the sync target when it's already on the default branch.
+
+Watching PR #15 now.
