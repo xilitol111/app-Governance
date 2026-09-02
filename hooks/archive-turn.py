@@ -487,8 +487,37 @@ def ensure_usage_mirror():
     return r.returncode == 0 and os.path.isdir(os.path.join(USAGE_MIRROR_PATH, ".git"))
 
 
+def on_default_branch(cwd):
+    """True when cwd's checked-out branch IS its own default branch.
+
+    sync_mirror_before_write always syncs against origin/<default branch> —
+    fine when mirror_dir is the dedicated side-clone (USAGE_MIRROR_PATH),
+    which only ever tracks the default branch. But resolve_usage_mirror_dir
+    also reuses cwd directly when cwd already is a clone of this repo, and
+    a session can just as easily be sitting on a feature branch there (e.g.
+    developing this very hook). Without this check, sync_mirror_before_write
+    would `git reset --hard origin/<default>` — or rebase onto it — the
+    session's ACTUAL working branch, discarding whatever commits it has
+    that aren't on the default branch yet. Caught live 2026-08-31: a feature
+    branch's own commits got reset away mid-session; only the fact that the
+    resulting force-push-shaped push was rejected as non-fast-forward
+    (this hook never force-pushes) kept it from reaching origin. Now: cwd is
+    only reused when it's already on the default branch — any other branch
+    falls back to the separate fixed mirror clone instead, so the two never
+    share a working tree whose branch this code doesn't fully control.
+    """
+    r = subprocess.run(
+        ["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=cwd, capture_output=True, text=True,
+    )
+    if r.returncode != 0:
+        return False
+    current = r.stdout.strip()
+    default_branch = default_branch_of(cwd)
+    return bool(default_branch) and current == default_branch
+
+
 def resolve_usage_mirror_dir(cwd):
-    if is_governance_repo(cwd):
+    if is_governance_repo(cwd) and on_default_branch(cwd):
         return cwd
     return USAGE_MIRROR_PATH if ensure_usage_mirror() else None
 
