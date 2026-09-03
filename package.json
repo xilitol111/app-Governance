@@ -3,7 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "bin": {
+    "agent-guard": "bin/agent-guard"
+  },
   "scripts": {
+    "generate": "node --import tsx tools/generate-adapters/index.ts",
+    "agent-guard": "node --import tsx tools/agent-guard/index.ts",
     "typecheck": "tsc --noEmit",
     "test": "node --import tsx --test test/*.test.ts"
   },
