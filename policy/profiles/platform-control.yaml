@@ -1,0 +1,8 @@
+profile: platform-control
+description: ローカルAI実行基盤（local_build、隔離worktree等）を固有ルールとして保持し、共通生成物では置き換えないWorkload向け（例：local LLM）
+applies_rules:
+  - CW-01
+  - CW-02
+  - CW-03
+  - CW-04
+  - CW-05

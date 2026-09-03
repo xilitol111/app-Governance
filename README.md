@@ -22,7 +22,7 @@ Claude Code運用ガイドラインの原本(source of truth)を管理するリ�
     全文を毎回注入すると際限なくコストが増えるため(古い部分は必要な時に手動で`Read`すればよい、
     という設計)。これにより、five時間制限の通知(後述)を受けてClaudeが`create_session`で自ら
     作った後継セッションも、この末尾抜粋だけで「直前まで何をしていたか」を把握した状態で始まる。
-  - **`hooks/archive-turn.py`**(`Stop`フック、Claudeが応答を終えるたび=毎ターン)
+  - **`legacy/hooks/archive-turn.py`**(`Stop`フック、Claudeが応答を終えるたび=毎ターン)
     会話のトランスクリプトファイルを読むだけで、**LLMは一切呼ばない**。直近のClaudeの発言を
     そのプロジェクトの`docs/session-archive.md`にローカルで追記するだけなので、追加のトークン
     消費はゼロ。このファイルは後で必要な時に読みに行くための保管庫であり、セッション開始時に
@@ -38,7 +38,7 @@ Claude Code運用ガイドラインの原本(source of truth)を管理するリ�
     実際にアプリの利用率表示(62%)とこのセッション自身のcache read累積を突き合わせて算出した
     ものだが、まだ1点のデータに基づく暫定値であり、今後の校正機会で精度を上げていく想定。
     経緯は`NOTES-2026-08-21-handoff.md`を参照。
-  - **`hooks/session-end.py`**(`SessionEnd`フック、セッションが終了するたび=1セッションにつき1回、
+  - **`legacy/hooks/session-end.py`**(`SessionEnd`フック、セッションが終了するたび=1セッションにつき1回、
     ユーザーが明示的に閉じる必要はなく自動的に発火する)
     `docs/session-archive.md`に変更があれば、1セッション分をまとめて1コミットとしてpushする
     (毎ターンコミットすると履歴が汚れるため、頻度をここで絞っている)。git操作のみでLLM呼び出しは
@@ -78,8 +78,8 @@ Claude Code運用ガイドラインの原本(source of truth)を管理するリ�
   }
   fetch "CLAUDE.md"
   fetch "hooks/session-start.sh"
-  fetch "hooks/archive-turn.py"
-  fetch "hooks/session-end.py"
+  fetch "legacy/hooks/archive-turn.py"
+  fetch "legacy/hooks/session-end.py"
   if [ "$GOV_SYNC_OK" = "1" ]; then
     mkdir -p ~/.claude/hooks
     cp "$GOV_TMP/CLAUDE.md" ~/.claude/CLAUDE.md
@@ -160,10 +160,10 @@ Claude Code運用ガイドラインの原本(source of truth)を管理するリ�
 
 ## トークン利用状況の収集(docs/token-usage-events.jsonl)
 
-`hooks/archive-turn.py`は、five時間制限監視用の累積スナップショット(`five-hour-samples.jsonl`)
+`legacy/hooks/archive-turn.py`は、five時間制限監視用の累積スナップショット(`five-hour-samples.jsonl`)
 とは別に、API呼び出し単位(assistant messageごと)で`input_tokens`/`output_tokens`/
 `cache_creation_input_tokens`/`cache_read_input_tokens`/モデル名/プロジェクト名を
-`docs/token-usage-events.jsonl`に記録する。可視化は`scripts/generate-usage-dashboard.py`
+`docs/token-usage-events.jsonl`に記録する。可視化は`legacy/scripts/generate-usage-dashboard.py`
 (日本語UI、日次/週次/月間・プロジェクト/セッション/モデル別のインタラクティブなHTMLダッシュボードを
 自己完結ファイルとして生成)。
 
@@ -211,11 +211,11 @@ silentlyスキップされ、データがそのマシンの外に出ない。
 irm https://raw.githubusercontent.com/xilitol111/app-Governance/main/scripts/install-windows.ps1 | iex
 ```
 
-`scripts/install-windows.ps1`は`hooks/session-start.py`(後述)・`archive-turn.py`・
+`scripts/install-windows.ps1`は`legacy/hooks/session-start.py`(後述)・`archive-turn.py`・
 `session-end.py`を`%USERPROFILE%\.claude\hooks\`に配置し、`%USERPROFILE%\.claude\settings.json`に
 Windows向けのコマンド形式(`~`展開に頼らず絶対パスを直接書き込む)で登録する。要`git`(Git for Windows)。
 
-`hooks/session-start.py`は、既存の`hooks/session-start.sh`(bash製、クラウド/WSL/macOS向けで
+`legacy/hooks/session-start.py`は、既存の`hooks/session-start.sh`(bash製、クラウド/WSL/macOS向けで
 そのまま維持)とは別に用意した**標準ライブラリのみのPython版**。ネイティブWindows上でshebangに
 頼らず`python`から直接実行できるよう、同じ処理(CLAUDE.md・フック本体の再取得、CLAUDE.mdの
 更新検知、直近コミット・`session-archive.md`末尾の表示)を`urllib`/`hashlib`で書き直したもの。

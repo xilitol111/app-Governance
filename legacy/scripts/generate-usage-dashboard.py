@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Generate a static, self-contained HTML dashboard from
 docs/token-usage-events.jsonl (per-API-call granularity, see
-hooks/archive-turn.py's append_usage_events).
+legacy/hooks/archive-turn.py's append_usage_events).
 
 Usage:
-    python3 scripts/generate-usage-dashboard.py [output_path] [events_path]
+    python3 legacy/scripts/generate-usage-dashboard.py [output_path] [events_path]
 
 Defaults to writing docs/dashboard.html relative to this script's repo root,
 reading docs/token-usage-events.jsonl from that same repo root. Pass
@@ -179,7 +179,7 @@ footer {{ margin-top: 2.5rem; font-size: 0.75rem; color: var(--text-muted); }}
   <h1>トークン利用ダッシュボード</h1>
   <p class="subtitle">生成日時 {generated_at} ・ データ元: docs/token-usage-events.jsonl ・ 記録済みAPI呼び出し数 {call_count}件</p>
   <div id="app"></div>
-  <footer>最新の状態にするには <code>python3 scripts/generate-usage-dashboard.py</code> を再実行してください。実データの保管場所は docs/token-usage-events.jsonl 本体で、このダッシュボードはその上に載る閲覧用のおまけです。</footer>
+  <footer>最新の状態にするには <code>python3 legacy/scripts/generate-usage-dashboard.py</code> を再実行してください。実データの保管場所は docs/token-usage-events.jsonl 本体で、このダッシュボードはその上に載る閲覧用のおまけです。</footer>
 </div>
 <script>
 const ROWS = {rows_json};
@@ -322,7 +322,7 @@ function seg(idAttr, options, current) {{
 function render() {{
   const app = document.getElementById("app");
   if (!ROWS.length) {{
-    app.innerHTML = '<div class="empty">まだ記録されたデータがありません。hooks/archive-turn.py のStopフックが今後のターンで発火するたびに蓄積されます。数ターン後に再生成してください。</div>';
+    app.innerHTML = '<div class="empty">まだ記録されたデータがありません。legacy/hooks/archive-turn.py のStopフックが今後のターンで発火するたびに蓄積されます。数ターン後に再生成してください。</div>';
     return;
   }}
 

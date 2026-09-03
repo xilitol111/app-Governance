@@ -29,7 +29,7 @@ import urllib.error
 import urllib.request
 
 GOV_RAW = "https://raw.githubusercontent.com/xilitol111/app-Governance/main"
-FILES = ["CLAUDE.md", "hooks/session-start.py", "hooks/archive-turn.py", "hooks/session-end.py"]
+FILES = ["CLAUDE.md", "legacy/hooks/session-start.py", "legacy/hooks/archive-turn.py", "legacy/hooks/session-end.py"]
 
 
 def read_hook_input():

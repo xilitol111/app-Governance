@@ -1,0 +1,51 @@
+rules:
+  - id: CW-01
+    scope: all-workloads
+    event: agent_end
+    match:
+      tool_class: shell
+      command_pattern: '成功判断の前に機械的検証を実行する'
+    action: require
+    enforcement: provider_extension
+    reason: 成功判断はテスト・型検査・静的検査・ビルドなどの機械的検証結果に基づける
+
+  - id: CW-02
+    scope: all-workloads
+    event: before_tool
+    match:
+      tool_class: shell
+      command_pattern: 'git (checkout|reset|clean)( |$)'
+    action: deny
+    enforcement: provider_extension
+    reason: 作業前に状態を確認し無関係な変更の巻き込みや上書きを防ぐ
+
+  - id: CW-03
+    scope: all-workloads
+    event: after_tool
+    match:
+      tool_class: file_write
+      path_pattern: 'プロジェクト指示文書'
+    action: require
+    enforcement: provider_extension
+    reason: 現行の指示と日付付きの経緯を分離して参照情報を明確に保つ
+
+  - id: CW-04
+    scope: all-workloads
+    event: agent_start
+    match:
+      tool_class: shell
+      command_pattern: '自律修復ループ'
+    action: require
+    enforcement: provider_extension
+    reason: 自律修復には品質基準と反復回数または時間の上限を明示する
+
+  - id: CW-05
+    scope: all-workloads
+    event: before_tool
+    match:
+      tool_class: file_write
+      content_pattern: '秘密鍵|トークン|認証情報'
+    action: deny
+    enforcement: required
+    ci_check: agent-guard check-secrets
+    reason: 秘密情報をコミット、ログ、応答、報告へ永続化または出力しない

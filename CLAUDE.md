@@ -150,7 +150,7 @@ rigor at the lowest token cost, not the most sophisticated one.
 - Prefer mechanical verification over LLM-judged verification: wire
   tests/lint/typecheck into the app repo's own `.claude/settings.json`
   (`PostToolUse`/`Stop` hooks that shell out, mirroring this repo's own
-  `hooks/archive-turn.py` — no LLM call, so it costs nothing against the
+  `legacy/hooks/archive-turn.py` — no LLM call, so it costs nothing against the
   usage window). Reach for an LLM-based checker/fixer subagent only for
   judgment calls a linter/test genuinely can't make (spec conformance,
   code smell), and only on higher-risk changes — each subagent call is a
@@ -220,7 +220,7 @@ rigor at the lowest token cost, not the most sophisticated one.
 When asked to analyze token/cost consumption (trend, "did the reduction
 measures help", session-level breakdown), source data from each project's own
 `docs/five-hour-samples.jsonl` (schema: `ts`, `cache_read_cumulative`,
-`session_id` — see `hooks/archive-turn.py`'s docstring for the schema's
+`session_id` — see `legacy/hooks/archive-turn.py`'s docstring for the schema's
 history and known caveats) rather than re-deriving it ad hoc, and structure
 the answer as: **結論(TL;DR)** → **内訳(表/グラフ)** → **このデータの限界**
 (always state what the data can't yet show — e.g. no pre-measure baseline,

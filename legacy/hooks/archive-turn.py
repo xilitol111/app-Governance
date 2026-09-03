@@ -129,7 +129,7 @@ a running total. Dedup is against the file's own contents (not an in-memory
 per-session set) since the same transcript gets rescanned from the start on
 every turn — this is what makes it safe to append-only across a whole
 session's worth of Stop hook firings without ever double-counting a call.
-See scripts/generate-usage-dashboard.py for the reader/report side.
+See legacy/scripts/generate-usage-dashboard.py for the reader/report side.
 
 Account-wide collection via a fixed mirror clone (2026-08-31): the above
 only ever wrote token-usage-events.jsonl into whichever project repo

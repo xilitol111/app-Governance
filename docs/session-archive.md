@@ -68,7 +68,7 @@ CLAUDE.mdの該当箇所を「`/clear`または`/compact`のどちらでも、�
 
 ファイルへの変更自体はローカルに適用済みです。コミット・push待ちの内容をそのまま貼ります。
 
-**`hooks/archive-turn.py`の変更点(要点)**
+**`legacy/hooks/archive-turn.py`の変更点(要点)**
 
 1. モジュール冒頭のdocstringに、なぜ毎ターンコミット方式に変えたか(`stop-hook-git-check.sh`がターン終了ごとにクリーンな作業ツリーを要求するため)を追記。
 2. 実処理を追加:
@@ -100,7 +100,7 @@ def commit_and_push(cwd):
 
 3. `main()`内、`archive_latest_turn`/`log_sample_and_maybe_notify`の直後に`commit_and_push(cwd)`を呼び出す1行を追加。
 
-**現状**: このリポジトリへのgit操作が今ブロックされているため、上記変更・および溜まっている`docs/`配下の差分は未コミットのままです。前回同様、セッションの区切り(`session-end.py`)で`docs/`側は自動解消される可能性がありますが、`hooks/archive-turn.py`自体は`session-end.py`の追跡対象外なので、そちらは自動では拾われません。次に通常のgit操作(add/commit)が通るタイミングで反映します。
+**現状**: このリポジトリへのgit操作が今ブロックされているため、上記変更・および溜まっている`docs/`配下の差分は未コミットのままです。前回同様、セッションの区切り(`session-end.py`)で`docs/`側は自動解消される可能性がありますが、`legacy/hooks/archive-turn.py`自体は`session-end.py`の追跡対象外なので、そちらは自動では拾われません。次に通常のgit操作(add/commit)が通るタイミングで反映します。
 
 ---
 <!-- uuid:174997e3-17e6-4072-80ef-dee2899139d9 -->
@@ -108,7 +108,7 @@ def commit_and_push(cwd):
 
 このNOTES追記(通常の文書ファイル)まで拒否されました。これまでの「文書は通る」というパターンが崩れており、現在はリポジトリ全体に対するBash経由のgit操作が広く制限されている状態のようです。これ以上の再試行はしません。
 
-ローカルには反映済みの未コミット分(`docs/`2ファイル、`hooks/archive-turn.py`、`NOTES-2026-08-21-handoff.md`)が残っています。内容は上のメッセージで全て提示済みなので、次に通常のgit操作が通るタイミング(または`session-end.py`が拾えるセッション区切り)でまとめて反映します。
+ローカルには反映済みの未コミット分(`docs/`2ファイル、`legacy/hooks/archive-turn.py`、`NOTES-2026-08-21-handoff.md`)が残っています。内容は上のメッセージで全て提示済みなので、次に通常のgit操作が通るタイミング(または`session-end.py`が拾えるセッション区切り)でまとめて反映します。
 
 ---
 <!-- uuid:0ff1a365-0a75-4e10-8760-5a0da64f3377 -->
@@ -117,9 +117,9 @@ def commit_and_push(cwd):
 状況を確認しようとした読み取り専用の`git status`すら拒否されました。現在このリポジトリに対するBash経由のgit操作は全面的にブロックされている状態です。これ以上の再試行はしません。
 
 **現状のまとめ**
-- ローカルには前回お伝えした未コミット分(`docs/`2ファイル、`hooks/archive-turn.py`、`NOTES-2026-08-21-handoff.md`)がそのまま残っています。
+- ローカルには前回お伝えした未コミット分(`docs/`2ファイル、`legacy/hooks/archive-turn.py`、`NOTES-2026-08-21-handoff.md`)がそのまま残っています。
 - 拒否メッセージには「今後この種の操作を許可したい場合、ユーザー側でBashの許可ルールを設定に追加できる」とあります。私からは設定変更の実行はできないため、恒久的に解消するにはそちらの対応が必要になる可能性があります。
-- 一時的なブロックの可能性もあるため、このセッションが区切りを迎えた際に`session-end.py`(エージェントの権限判定の外で動く)が拾える範囲(`docs/`配下)は自動で解消される見込みですが、`hooks/archive-turn.py`と`NOTES-2026-08-21-handoff.md`の変更はその対象外なので、通常のgit操作が再び通るようになるまで反映されません。
+- 一時的なブロックの可能性もあるため、このセッションが区切りを迎えた際に`session-end.py`(エージェントの権限判定の外で動く)が拾える範囲(`docs/`配下)は自動で解消される見込みですが、`legacy/hooks/archive-turn.py`と`NOTES-2026-08-21-handoff.md`の変更はその対象外なので、通常のgit操作が再び通るようになるまで反映されません。
 
 このStop hookの警告自体は、今のところ私からは対応不可能な状態です。
 
@@ -130,9 +130,9 @@ def commit_and_push(cwd):
 push成功、`main`は`origin/main`と完全に同期しました(前回の未pushコミット`05e0104`も含めて解消)。
 
 **実装完了内容:**
-- `hooks/archive-turn.py`: `commit_and_push`の「新規差分がなければpushを試みず即return」バグを修正し、`git rev-list --count HEAD --not --remotes`を真実源にpush状態(`pushed`/`unpushed`/`no_repo`/`unknown`)を毎ターン確認・返却。five時間通知はpush済み確認が取れた場合のみ`create_session`実行を承認し、未確認なら明示的に警告してブロックする文言に変更。
+- `legacy/hooks/archive-turn.py`: `commit_and_push`の「新規差分がなければpushを試みず即return」バグを修正し、`git rev-list --count HEAD --not --remotes`を真実源にpush状態(`pushed`/`unpushed`/`no_repo`/`unknown`)を毎ターン確認・返却。five時間通知はpush済み確認が取れた場合のみ`create_session`実行を承認し、未確認なら明示的に警告してブロックする文言に変更。
 - `archive_latest_turn`: ツール呼び出しのみのターンを黙ってスキップする穴を修正し、テキストがなくてもツール名のプレースホルダーを必ず記録するように変更(`/clear`直後に記録漏れが起きる問題に対応)。
-- `hooks/session-end.py`: 同じpush確認ロジックをフォールバックにも追加。
+- `legacy/hooks/session-end.py`: 同じpush確認ロジックをフォールバックにも追加。
 - `CLAUDE.md`: `/clear`・`/compact`と`create_session`は前提条件が異なる(前者は緩いファイル化ルール、後者はpush確認という機械的ゲート)ことを明記。
 - `NOTES-2026-08-21-handoff.md`: 経緯と決定事項を記録。
 
@@ -146,7 +146,7 @@ push成功、`main`は`origin/main`と完全に同期しました(前回の未pu
 
 **今: できていません。** `git log`を見ると、このセッションが再開されてから新しく`3684437`(自動アーカイブコミット)がローカルに作成されていますが、`origin/main`より1コミット進んだ状態(`ahead 1`)のままです。つまり今回もpushだけ失敗しています。
 
-ただし重要な点があります: **この`3684437`は、私が直前に修正した新しい`archive-turn.py`ではなく、まだ古い(修正前の)バージョンによって作られたコミットです。** hookの実体(`~/.claude/hooks/archive-turn.py`)は`session-start.sh`がセッション開始時にしか再取得しない仕組みなので、このセッションが動いている間は、私が`/home/user/app-governance/hooks/archive-turn.py`に書いた修正はまだ反映されていません。次にセッションが開始し直すタイミングで初めて新しいロジック(push失敗を毎ターン自動リトライ)が効き始めます。
+ただし重要な点があります: **この`3684437`は、私が直前に修正した新しい`archive-turn.py`ではなく、まだ古い(修正前の)バージョンによって作られたコミットです。** hookの実体(`~/.claude/hooks/archive-turn.py`)は`session-start.sh`がセッション開始時にしか再取得しない仕組みなので、このセッションが動いている間は、私が`/home/user/app-governance/legacy/hooks/archive-turn.py`に書いた修正はまだ反映されていません。次にセッションが開始し直すタイミングで初めて新しいロジック(push失敗を毎ターン自動リトライ)が効き始めます。
 
 **前は: できていました。** このセッション内だけでも、`66631d9`・`c496579`・`445cfcf`・`f7831d4`、そして直前の`69b7679`と、5回はpushが成功しています。逆に失敗したのは`05e0104`関連のタイミング(2回)と今回の`3684437`です。内容を見ても「会話ログを含むか」「hookコード自体の変更か」といった一貫した基準は見当たらず(`69b7679`はhookコード変更+会話ログを含んでいたのに成功している)、確率的・断続的なブロックという理解が今のところ一番妥当です。
 
@@ -232,7 +232,7 @@ Sources:
 3. トークン課金は個人の財布に直撃するため、`/schedule`のような無人・定期実行は今のところ見送るべき(記事も「研究プレビュー、慎重に」と明言)。
 4. 「本番反映の判断」を人間が握る、という記事の結論は個人開発でも変わらない——ここを自動化する動機がそもそも薄い。
 
-一方で、**このリポジトリ(app-Governance)は既にループエンジニアリングの土台の一部を独力で実装済み**という点は特筆すべきです。`hooks/archive-turn.py`(Stopフック、毎ターン発火、LLM非呼び出し)は「記憶(Persistence)」の実装そのもので、`CLAUDE.md`の自動配布は「判断原則の文書化」そのものです。つまり土台(層でいうHarness〜Loopの入口)は既にあり、欠けているのは「検証(Verification)」の機械化だけ、という状態です。
+一方で、**このリポジトリ(app-Governance)は既にループエンジニアリングの土台の一部を独力で実装済み**という点は特筆すべきです。`legacy/hooks/archive-turn.py`(Stopフック、毎ターン発火、LLM非呼び出し)は「記憶(Persistence)」の実装そのもので、`CLAUDE.md`の自動配布は「判断原則の文書化」そのものです。つまり土台(層でいうHarness〜Loopの入口)は既にあり、欠けているのは「検証(Verification)」の機械化だけ、という状態です。
 
 ---
 
@@ -346,10 +346,10 @@ CLAUDE.md自身の「Project CLAUDE.md hygiene」節にある「数百行を超�
 - そこから`CLAUDE.md`と`hooks/`配下3ファイル自身を`~/.claude/`へ**毎回上書きコピー**する。つまりこのリポジトリの`main`を更新するだけで、次にどのプロジェクトでセッションが開かれても自動的に最新版が反映される(Setup Scriptを触り直す必要なし)。
 - あわせて`git log --oneline -10`・直近コミット全文・`git status --short`・`docs/session-archive.md`末尾をコンテキストに出力。
 
-### 3. 毎ターン終了時(`hooks/archive-turn.py`、`Stop`フック)
+### 3. 毎ターン終了時(`legacy/hooks/archive-turn.py`、`Stop`フック)
 - Claudeの発言を各プロジェクトの`docs/session-archive.md`にローカル追記するだけ(LLM呼び出しなし)。five時間利用枠監視用のトークン累積も記録。
 
-### 4. セッション終了時(`hooks/session-end.py`、`SessionEnd`フック)
+### 4. セッション終了時(`legacy/hooks/session-end.py`、`SessionEnd`フック)
 - `docs/session-archive.md`に変更があれば、**ユーザー確認なしに自動で**1コミットにまとめてpush(このファイル専用の動作に限定)。
 
 ### 5. 補助: 五時間枠アンカーRoutine
@@ -716,7 +716,7 @@ check-in自体は読み取り専用のAPI呼び出し2つだけで軽いです�
 
 このリポジトリ自体がすでに「継続的なトークン消費データ収集基盤」を持っています。
 
-- **各アプリリポジトリの `docs/five-hour-samples.jsonl`**: `hooks/archive-turn.py`(Stopフック)が毎ターン、トランスクリプトから`cache_read_input_tokens`の累積値をLLM呼び出しなしでローカルappendしている。ただし既知の制約として、①5時間枠のリセット境界をhookは検知できず累積が過大方向にズレる、②アカウント全体(他セッション・claude.ai・Desktop等)の消費は見えない、③集計はセッション/プロジェクト単位でバラバラ、という限界がドキュメント化済み(`archive-turn.py`のdocstring)。
+- **各アプリリポジトリの `docs/five-hour-samples.jsonl`**: `legacy/hooks/archive-turn.py`(Stopフック)が毎ターン、トランスクリプトから`cache_read_input_tokens`の累積値をLLM呼び出しなしでローカルappendしている。ただし既知の制約として、①5時間枠のリセット境界をhookは検知できず累積が過大方向にズレる、②アカウント全体(他セッション・claude.ai・Desktop等)の消費は見えない、③集計はセッション/プロジェクト単位でバラバラ、という限界がドキュメント化済み(`archive-turn.py`のdocstring)。
 - **`docs/session-archive.md`**: テキストログで構造化されていない。
 - **もっとリッチな一次データが実はローカルに既にある**: Claude Code自体が`~/.claude/projects/**/*.jsonl`に全ターンの生トランスクリプトと公式usageフィールド(input/output/cache_read/cache_creation)を保持している。今のhookはこの一部を間引いて転記しているだけで、本当に厳密な集計をしたいなら本来はこちらが一次ソース。
 - **claude.aiの利用状況%表示**: UIのみでAPI化されていない、手動確認が必要。
@@ -752,7 +752,7 @@ check-in自体は読み取り専用のAPI呼び出し2つだけで軽いです�
 
 **分析(問い1)**: [レポート](送信済みArtifact)の通り、現状のデータでは「削減策で改善したか」を厳密には判定できません — `five-hour-samples.jsonl`によるログ収集自体が削減策と同じ2026-08-22朝に稼働し始めたばかりで、比較対象となる「以前」のデータが構造的に存在しないためです。ただし本日1日だけでもGAMEの合計消費は校正済みの1枠(five_hour)基準値の約15倍相当と大きく、特に13:59〜翌0:41の1セグメント(102分)だけで本日合計の約38%を占め、PRマージ〜次バッチ着手をまたいでも`/clear`等の区切りが入っていないことが確認できました。「同規模の開発を続ければ週次リミット逼迫は再発しうる」という仮説を支持する材料です。
 
-**構造化(問い2)**: `hooks/archive-turn.py`に`session_id`を追加し、今回のような「値が下がったら新セッション」という推測ロジックを不要にしました。また`CLAUDE.md`に「結論→内訳→このデータの限界→次のアクション」という固定フォーマットを追記し、以後の使用量分析依頼が毎回同じ型で返るようにしました。PR #8(draft)として作成・push済みで、監視を継続します。
+**構造化(問い2)**: `legacy/hooks/archive-turn.py`に`session_id`を追加し、今回のような「値が下がったら新セッション」という推測ロジックを不要にしました。また`CLAUDE.md`に「結論→内訳→このデータの限界→次のアクション」という固定フォーマットを追記し、以後の使用量分析依頼が毎回同じ型で返るようにしました。PR #8(draft)として作成・push済みで、監視を継続します。
 
 ---
 <!-- uuid:c37ded47-319a-4d58-bb2a-77c8d6e7dc1c -->
@@ -1268,7 +1268,7 @@ Opened draft PR [#10](https://github.com/xilitol111/app-Governance/pull/10) and 
 
 Summary of what got done this turn:
 - Confirmed GAME#7 (CI build+lint) and app-Governance#9 (Phase 1 findings) are both merged.
-- Implemented item 2 from `docs/plans/token-consumption-followups.md`: `hooks/archive-turn.py` now detects a successful PR merge in the transcript and fires a one-time `/clear`/`/compact` nudge, mirroring the five-hour interval mechanism. Unit-verified with synthetic transcripts (dedup + error suppression both check out).
+- Implemented item 2 from `docs/plans/token-consumption-followups.md`: `legacy/hooks/archive-turn.py` now detects a successful PR merge in the transcript and fires a one-time `/clear`/`/compact` nudge, mirroring the five-hour interval mechanism. Unit-verified with synthetic transcripts (dedup + error suppression both check out).
 - Updated the followups doc (items 1 and 2 now marked done) and pushed everything.
 
 Remaining open items in the followups doc: 1b (commit an actual GAME test suite), 3 (split kakeibo's CLAUDE.md), 4, 5, 6 — let me know if you want me to keep going on one of those next.
@@ -1286,10 +1286,10 @@ PR #10 has no actionable activity yet (just subscription confirmations, and this
 Draft PR opened and I'll watch it: [PR #12](https://github.com/xilitol111/app-Governance/pull/12).
 
 **What this gives you:**
-- **収集**: `hooks/archive-turn.py` は既存の per-turn 累積スナップショット(`five-hour-samples.jsonl`)に加え、`docs/token-usage-events.jsonl` に API呼び出し単位(assistant message ごと)で `input/output/cache_creation/cache_read` トークン数とモデル名を記録するようになりました — これが今取れる最も細かい粒度です。
-- **可視化**: `scripts/generate-usage-dashboard.py` を実行すると、そのjsonlから自己完結型のHTMLダッシュボード(日別トレンド、セッション別・モデル別内訳)を生成できます。外部サービス不要、依存ライブラリなし。見たいときに実行してArtifactとして公開すれば「一目で確認」できます。
+- **収集**: `legacy/hooks/archive-turn.py` は既存の per-turn 累積スナップショット(`five-hour-samples.jsonl`)に加え、`docs/token-usage-events.jsonl` に API呼び出し単位(assistant message ごと)で `input/output/cache_creation/cache_read` トークン数とモデル名を記録するようになりました — これが今取れる最も細かい粒度です。
+- **可視化**: `legacy/scripts/generate-usage-dashboard.py` を実行すると、そのjsonlから自己完結型のHTMLダッシュボード(日別トレンド、セッション別・モデル別内訳)を生成できます。外部サービス不要、依存ライブラリなし。見たいときに実行してArtifactとして公開すれば「一目で確認」できます。
 
-Since this session hasn't had a Stop hook fire yet, `token-usage-events.jsonl` doesn't have real data yet — it'll start filling in from this turn onward. Next time you want to check the dashboard, just ask me to run `scripts/generate-usage-dashboard.py` and publish it.
+Since this session hasn't had a Stop hook fire yet, `token-usage-events.jsonl` doesn't have real data yet — it'll start filling in from this turn onward. Next time you want to check the dashboard, just ask me to run `legacy/scripts/generate-usage-dashboard.py` and publish it.
 
 ---
 <!-- uuid:31fd0776-8867-42b4-b87d-99b427402816 -->
@@ -1306,14 +1306,14 @@ Pushed to PR #12.
 **まとめ:**
 
 **① データ収集の堅牢性(最重要ポイント)**
-- 既存の `hooks/archive-turn.py`(Stopフック=毎ターン発火)に加えて、API呼び出し単位で `docs/token-usage-events.jsonl` に記録するようにしました。これが今取れる最も細かい粒度です。
+- 既存の `legacy/hooks/archive-turn.py`(Stopフック=毎ターン発火)に加えて、API呼び出し単位で `docs/token-usage-events.jsonl` に記録するようにしました。これが今取れる最も細かい粒度です。
 - 既存の仕組みで**毎ターン自動コミット・push**されるため、コンテナが不測の事態で失われてもロスしません。
 - アカウントに存在する環境は `kakeibo` の1つだけで、そこには自己修復型のSetup Scriptが既に登録済み(毎セッション開始時にフックを再登録)——つまり「どのセッションでも確実に収集を強制する」という要件は、**既存の設計で既に構造的に満たされています**。実際に `xilitol111/kakeibo` リポジトリを確認したところ、`five-hour-samples.jsonl` と `session-archive.md` が既に存在し、フックが正しく発火していることを確認しました。
 - 唯一の注意点:今回追加した `token-usage-events.jsonl` の収集ロジックは、この app-Governance の `main` にマージされて初めて他のセッション(GAME/kakeiboなど)にも反映されます([PR #12](https://github.com/xilitol111/app-Governance/pull/12) がまだ未マージ)。
 
 **② ダッシュボード(おまけ扱い)**
 - 日本語UI化、グラフ中心の表示、日次/週次/月間の期間切替、セッション別/モデル別/全体のグループ切替、列見出しクリックでのソートに対応しました。プレビュー: https://claude.ai/code/artifact/33b57df0-68e8-4ceb-aa06-2c645125cadf (今はサンプルデータ表示中)
-- `python3 scripts/generate-usage-dashboard.py` を実行すればいつでも最新データで再生成できます。実データはこのターンからの蓄積分のみで、PR #12がマージされるまでは他リポジトリには反映されません。
+- `python3 legacy/scripts/generate-usage-dashboard.py` を実行すればいつでも最新データで再生成できます。実データはこのターンからの蓄積分のみで、PR #12がマージされるまでは他リポジトリには反映されません。
 
 PR #12は監視継続中です。マージのタイミングはお任せします。
 
@@ -1344,7 +1344,7 @@ PR #13は監視継続中です。特に対応が必要な事項はありませ�
 
 Draft PR opened and watching: [PR #14](https://github.com/xilitol111/app-Governance/pull/14)
 
-**重要な注意点**: ネイティブWindows対応(`hooks/session-start.py`・`scripts/install-windows.ps1`)は、実機での動作確認ができていません。このセッション自体はクラウドのLinux環境で動いており、PowerShellや実際のWindows上でのフック起動を直接検証する手段がないためです。実装は「ネイティブWindowsはshebang非対応で、フックコマンドにインタプリタを明示指定する必要がある」という一般的な理解に基づいていますが、公式ドキュメントでの一次確認はできていません(調査エージェントも専用ドキュメントページを見つけられませんでした)。
+**重要な注意点**: ネイティブWindows対応(`legacy/hooks/session-start.py`・`scripts/install-windows.ps1`)は、実機での動作確認ができていません。このセッション自体はクラウドのLinux環境で動いており、PowerShellや実際のWindows上でのフック起動を直接検証する手段がないためです。実装は「ネイティブWindowsはshebang非対応で、フックコマンドにインタプリタを明示指定する必要がある」という一般的な理解に基づいていますが、公式ドキュメントでの一次確認はできていません(調査エージェントも専用ドキュメントページを見つけられませんでした)。
 
 **マージ後に実行していただくコマンド**(PowerShellで1回):
 ```powershell

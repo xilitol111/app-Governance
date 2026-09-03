@@ -49,8 +49,8 @@ fetch() {
 }
 fetch "CLAUDE.md"
 fetch "hooks/session-start.sh"
-fetch "hooks/archive-turn.py"
-fetch "hooks/session-end.py"
+fetch "legacy/hooks/archive-turn.py"
+fetch "legacy/hooks/session-end.py"
 
 if [ "$GOV_SYNC_OK" != "1" ]; then
   echo "ERROR: failed to fetch one or more files from $GOV_RAW — check network access and try again." >&2

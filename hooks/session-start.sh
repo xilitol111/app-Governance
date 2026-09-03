@@ -52,8 +52,8 @@ fetch() {
 
 fetch "CLAUDE.md"
 fetch "hooks/session-start.sh"
-fetch "hooks/archive-turn.py"
-fetch "hooks/session-end.py"
+fetch "legacy/hooks/archive-turn.py"
+fetch "legacy/hooks/session-end.py"
 
 # All-or-nothing: only replace the live files once every fetch above
 # succeeded, so a mid-fetch network hiccup can't leave CLAUDE.md and the

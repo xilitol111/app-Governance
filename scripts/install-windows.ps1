@@ -7,7 +7,7 @@
 # This script exists specifically for native Windows, where a bash script
 # with a `#!/bin/bash` shebang won't run without Git Bash, and Claude
 # Code's hook runner invokes commands directly rather than through a POSIX
-# shell -- see hooks/session-start.py's docstring for why that file exists
+# shell -- see legacy/hooks/session-start.py's docstring for why that file exists
 # as a separate, pure-Python twin of hooks/session-start.sh.
 #
 # Usage (run once, in a PowerShell prompt):
@@ -22,8 +22,8 @@
 # see so this script can be corrected for the next person.
 #
 # What this does, and does NOT do:
-# - Installs hooks/session-start.py, hooks/archive-turn.py,
-#   hooks/session-end.py, and CLAUDE.md to $env:USERPROFILE\.claude\, and
+# - Installs legacy/hooks/session-start.py, legacy/hooks/archive-turn.py,
+#   legacy/hooks/session-end.py, and CLAUDE.md to $env:USERPROFILE\.claude\, and
 #   registers them in $env:USERPROFILE\.claude\settings.json (merging into
 #   any existing settings.json rather than overwriting it).
 # - Bakes the absolute resolved path and interpreter into each hook's
@@ -75,7 +75,7 @@ try {
     Write-Warning "git was not found on PATH. Local collection will still work, but nothing will sync to GitHub without Git for Windows installed and authenticated: https://git-scm.com/download/win"
 }
 
-$Files = @("CLAUDE.md", "hooks/session-start.py", "hooks/archive-turn.py", "hooks/session-end.py")
+$Files = @("CLAUDE.md", "legacy/hooks/session-start.py", "legacy/hooks/archive-turn.py", "legacy/hooks/session-end.py")
 foreach ($f in $Files) {
     if ($f -eq "CLAUDE.md") {
         $dest = Join-Path $ClaudeDir "CLAUDE.md"

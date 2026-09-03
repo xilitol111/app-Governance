@@ -47,7 +47,7 @@ actually needed.
     `package.json` yet.
 
 2. [x] **Code a PR-merge-boundary `/clear` nudge, mirroring the five-hour
-   notification mechanism** (this repo, `hooks/archive-turn.py`) — done
+   notification mechanism** (this repo, `legacy/hooks/archive-turn.py`) — done
    2026-08-23. Added `find_last_successful_merge` + `maybe_notify_pr_merge`:
    detects a successful `mcp__github__merge_pull_request` tool call in the
    transcript and fires a one-time-per-merge `decision:"block"` reason (deduped
@@ -96,7 +96,7 @@ actually needed.
    repo's `main` — i.e. only after the PR carrying that change is merged.
 
 6. [x] **Per-API-call token usage collection + dashboard** — added
-   2026-08-31, PR #12. `hooks/archive-turn.py` now also appends
+   2026-08-31, PR #12. `legacy/hooks/archive-turn.py` now also appends
    `docs/token-usage-events.jsonl`, one row per actual API call
    (assistant `message.id`) with its own `input_tokens`/`output_tokens`/
    `cache_creation_input_tokens`/`cache_read_input_tokens`/`model` —
@@ -145,7 +145,7 @@ actually needed.
    full set of rows.
 
 9. [ ] **Native-Windows install path — needs real-machine verification**
-   Added 2026-08-31: `hooks/session-start.py` (pure-Python twin of
+   Added 2026-08-31: `legacy/hooks/session-start.py` (pure-Python twin of
    `hooks/session-start.sh`, since a bash shebang script won't run on
    native Windows without Git Bash) and `scripts/install-windows.ps1`
    (PowerShell installer, bakes absolute paths + interpreter into each
