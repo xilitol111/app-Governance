@@ -1,0 +1,2 @@
+#!/bin/sh
+exec node --import tsx "$(dirname "$0")/../tools/agent-guard/index.ts" "$@"

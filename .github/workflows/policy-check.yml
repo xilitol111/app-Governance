@@ -1,0 +1,39 @@
+name: Policy check
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  policy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Generated adapters are current
+        run: npm run generate && git diff --exit-code
+      - name: Run every declared ci_check
+        shell: bash
+        run: |
+          export PATH="$PWD/bin:$PATH"
+          mapfile -t checks < <(node --input-type=module <<'NODE'
+          import { readFileSync } from 'node:fs';
+          import { parse } from 'yaml';
+          const policy = parse(readFileSync('policy/capabilities.yaml', 'utf8'));
+          for (const rule of policy.rules) if (rule.ci_check) console.log(rule.ci_check);
+          NODE
+          )
+          test "${#checks[@]}" -gt 0
+          for check in "${checks[@]}"; do
+            echo "+ $check"
+            read -r -a command <<< "$check"
+            command -v "${command[0]}" >/dev/null
+            "${command[@]}"
+          done
