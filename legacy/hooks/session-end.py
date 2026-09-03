@@ -2,7 +2,7 @@
 """SessionEnd hook: commit + push the session archive + five-hour samples if changed.
 
 Fires automatically once per session (no explicit close needed). Now mostly a
-fallback: hooks/archive-turn.py commits+pushes the same two files every turn
+fallback: legacy/hooks/archive-turn.py commits+pushes the same two files every turn
 (added 2026-08-22, see its own docstring), so this normally finds nothing left
 to do. Kept for the case where archive-turn.py didn't run on the final turn
 for some reason — the single worst moment for a stuck unpushed commit to go

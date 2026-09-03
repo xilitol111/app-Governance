@@ -24,7 +24,7 @@
    ユーザー自身の発言までは記録しない、という元々のスコープは維持)。
 
 **実装した変更:**
-- `hooks/archive-turn.py`:
+- `legacy/hooks/archive-turn.py`:
   - `archive_latest_turn`: 上記のtool-onlyターン対応。
   - `commit_and_push`: 「新規差分がなければpushを試みる前に即return」というバグを修正
     (これが実際に`05e0104`が未pushのまま放置されていた原因そのもの)。`git rev-list --count HEAD
@@ -36,7 +36,7 @@
   - 通知文に、push状態に応じた分岐(pushed済みならcreate_session実行を承認、未確認/失敗なら
     明確な警告文とともに「create_sessionを呼ぶな、hookが自動再試行するので数ターン待って
     それでも直らなければユーザーに直接伝えろ」と指示)を追加。
-- `hooks/session-end.py`: フォールバックとしての存在意義(archive-turn.pyが最後のターンで
+- `legacy/hooks/session-end.py`: フォールバックとしての存在意義(archive-turn.pyが最後のターンで
   何らかの理由で走らなかった場合の保険)に対し、同じ「未コミットの差分」チェックだけでは
   「コミット済みだが未push」を検知できない、という同種の穴があったため、同じ
   `git rev-list --count HEAD --not --remotes`ベースのチェックを追加。
@@ -63,7 +63,7 @@ Zenn記事の節約策検討(直下のセクション)から派生した一連�
 
 **関連するリスク認識(ユーザーと合意済み)**: 会話ログ(`docs/session-archive.md`)を毎ターン即座に外部リポジトリへpushする頻度が、セッション終了時の1回から毎ターンに増えたことについて、「後から気づいて戻せるなら問題ない」という判断で許容している(git履歴なので事後の修正・revertは可能という前提)。
 
-**未反映の変更(要注意)**: `hooks/archive-turn.py`への上記コードは**ローカルには適用済みだがコミット・push未完了**。このリポジトリ(docs/配下・hooks/archive-turn.py)に対するBash経由のgit操作が、自動モードの分類器に繰り返しブロックされたため(会話ログの外部送信、および自動化コード自体の書き換えという2種の操作が特に狙い撃ちでブロックされた模様——CLAUDE.md/README.md/NOTES.mdなどの文書編集は問題なく通った)。次にこのリポジトリへの通常のgit操作が通るタイミングで、このNOTES自体の変更と合わせて反映する必要がある。
+**未反映の変更(要注意)**: `legacy/hooks/archive-turn.py`への上記コードは**ローカルには適用済みだがコミット・push未完了**。このリポジトリ(docs/配下・legacy/hooks/archive-turn.py)に対するBash経由のgit操作が、自動モードの分類器に繰り返しブロックされたため(会話ログの外部送信、および自動化コード自体の書き換えという2種の操作が特に狙い撃ちでブロックされた模様——CLAUDE.md/README.md/NOTES.mdなどの文書編集は問題なく通った)。次にこのリポジトリへの通常のgit操作が通るタイミングで、このNOTES自体の変更と合わせて反映する必要がある。
 
 ---
 
@@ -144,7 +144,7 @@ handles the handoff automatically and the person only has to move over, the swit
 lower, so the frequency doesn't need to be every single time, but can be raised / more frequent
 is fine.)
 
-**Change made, in `hooks/archive-turn.py`:**
+**Change made, in `legacy/hooks/archive-turn.py`:**
 - `THRESHOLD_TOKENS`: `15,000,000` → `5,000,000`.
 - Notification semantics: was a one-time trip wire (fired once per session, via a boolean marker
   file). Now an *interval*: the marker file stores the cumulative value at the last notification,
@@ -164,7 +164,7 @@ the user's only remaining action is clicking a link. Lowering the threshold and 
 one-time to recurring reflects that the cost of nudging (and of the user acting on it) dropped,
 not that the five-hour calibration itself changed.
 
-**Verification**: `python3 -m py_compile hooks/archive-turn.py` passed. Directly exercised
+**Verification**: `python3 -m py_compile legacy/hooks/archive-turn.py` passed. Directly exercised
 `log_sample_and_maybe_notify()` with simulated growing cumulative totals
 (1M, 4M, 5.5M, 9M, 10.2M, 15.1M, 15.2M) against a scratch cwd/session id — fired exactly at 5.5M
 and 15.1M (the two points that cross a new 5M-multiple boundary past the last notification),
@@ -413,11 +413,11 @@ without materially increasing token consumption. Design settled on:
     `git log --oneline -10` + the latest commit's full message +
     `git status --short` to stdout (auto-injected into context at session
     start). Zero LLM cost; small bounded token cost once per session.
-  - `hooks/archive-turn.py` (`Stop`, every turn): parses the transcript file
+  - `legacy/hooks/archive-turn.py` (`Stop`, every turn): parses the transcript file
     (no model call) and appends the latest assistant text to
     `docs/session-archive.md` in the current project, locally only. Zero
     token cost — nothing here is injected into context.
-  - `hooks/session-end.py` (`SessionEnd`, once per session, fires
+  - `legacy/hooks/session-end.py` (`SessionEnd`, once per session, fires
     automatically — no explicit close needed): commits + pushes
     `docs/session-archive.md` if it changed, bundling the whole session
     into one commit rather than one per turn. Zero token cost (pure git
@@ -434,7 +434,7 @@ without materially increasing token consumption. Design settled on:
   still lost. Zero-cost automation cannot fully close this; the mitigation
   is the CLAUDE.md guidance to commit/write decisions at checkpoints rather
   than only at a session's end.
-- Implemented and locally verified this session: `hooks/archive-turn.py` run
+- Implemented and locally verified this session: `legacy/hooks/archive-turn.py` run
   against this session's own real transcript correctly appended the latest
   assistant turn to `docs/session-archive.md` with a dedup marker; the
   resulting file was correctly detected as a new file by
@@ -491,7 +491,7 @@ Investigation, in order:
    without per-turn timestamps — which is exactly what the new logging (below)
    now captures going forward.
 5. **Implementation attempt surfaced a real data-quality bug**: extended
-   `hooks/archive-turn.py` to sum `cache_read_input_tokens` across the
+   `legacy/hooks/archive-turn.py` to sum `cache_read_input_tokens` across the
    transcript for a same-session proxy metric. First pass (summing every
    `type:"assistant"` JSONL line) came out **77.3M**, vs. `get_session`'s
    18.39M for the same moment — a ~4.2x overcount. Root cause found: each

@@ -1,0 +1,8 @@
+profile: standard-app
+description: 共通生成物とアプリ固有ルールを受け、クラウドAIがチェックアウトして利用するアプリケーションWorkload向け（例：GAME）
+applies_rules:
+  - CW-01
+  - CW-02
+  - CW-03
+  - CW-04
+  - CW-05

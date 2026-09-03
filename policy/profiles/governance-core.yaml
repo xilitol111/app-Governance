@@ -1,0 +1,8 @@
+profile: governance-core
+description: ポリシーの正本を持つガバナンスリポジトリ自身向け。自動配送の対象にせず、自身のCIではschema検証と生成試験だけを必須にする
+applies_rules:
+  - CW-01
+  - CW-02
+  - CW-03
+  - CW-04
+  - CW-05
